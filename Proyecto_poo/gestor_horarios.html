@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestor de horarios y reportes</title>
+<style>
+:root{--bg:#f4f5f7;--pn:#fff;--tx:#1d2330;--mut:#667085;--bd:#dde1e8;--ac:#3b6ef5;--acs:#e6edff;--bad:#d92d20;--bads:#fde8e6;--ok:#12805c;--oks:#def5ec;--wn:#b54708}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--pn:#1d222b;--tx:#e8ebf1;--mut:#9aa3b2;--bd:#323946;--ac:#7c9cff;--acs:#27325a;--bad:#ff7a70;--bads:#3d2220;--ok:#4cd6a0;--oks:#16372c;--wn:#f5a65b}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
+h1{font-size:16px;margin:0}
+.load{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
+.mut,small{color:var(--mut)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 300px;gap:10px;padding:10px}
+.pn{background:var(--pn);border:1px solid var(--bd);border-radius:10px;display:flex;flex-direction:column;min-height:0}
+.pn>h2{font-size:12px;margin:0;padding:10px 12px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.sc{overflow:auto;padding:8px;flex:1;min-height:0}
+.mat{border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;position:relative}
+.mat:hover{border-color:var(--ac)}
+.mat .n{position:absolute;right:10px;top:8px;font-size:11px;color:var(--mut)}
+.mat small{display:block}
+.mat.on{background:var(--acs);border-color:var(--ac)}
+.mat.off{opacity:.55;cursor:not-allowed}
+.t{display:inline-block;font-style:normal;font-size:11px;padding:1px 7px;border-radius:99px;margin:4px 4px 0 0;background:var(--bd)}
+.t.ok{background:var(--oks);color:var(--ok)}.t.bad{background:var(--bads);color:var(--bad)}.t.warn{color:var(--wn);background:transparent;border:1px solid var(--wn)}
+.al{border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
+.al.sel{border-color:var(--ac);background:var(--acs)}
+.row{display:flex;align-items:center;gap:8px;padding:7px 8px;cursor:pointer}
+.who{flex:1;min-width:0}.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arr{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:6px;width:26px;height:26px;cursor:pointer}
+.arr:hover{border-color:var(--ac)}
+.bdg{font-size:11px;min-width:22px;text-align:center;padding:1px 6px;border-radius:99px;background:var(--bd)}
+.bdg.ok{background:var(--oks);color:var(--ok)}
+.rep{padding:0 10px 8px 42px;font-size:13px}.rep ul{margin:0;padding-left:16px}.rep li{margin-bottom:4px}
+.grid{display:grid;min-width:560px}
+.dh{text-align:center;font-weight:600;font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd);background:var(--pn);position:sticky;top:0;z-index:2}
+.hrs div{font-size:11px;color:var(--mut);text-align:right;padding-right:6px}
+.col{position:relative;border-left:1px solid var(--bd);background-image:linear-gradient(var(--bd) 1px,transparent 1px)}
+.blk{position:absolute;left:2px;right:2px;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer;overflow:hidden;color:#1d2330;background:hsl(var(--h) 70% 84%);border-left:4px solid hsl(var(--h) 60% 42%)}
+.blk:hover{outline:2px solid var(--bad)}.blk span{display:block;font-size:11px;opacity:.8}
+.c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
+.bot{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px;height:210px}
+.bot .in{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
+textarea{flex:1;resize:none;border:1px solid var(--bd);border-radius:8px;padding:8px;font:inherit;background:var(--bg);color:var(--tx)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button.b{border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+button.b.s{background:transparent;color:var(--ac)}
+button:disabled,textarea:disabled{opacity:.5;cursor:not-allowed}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid var(--bd);padding:4px 8px;text-align:left}th{background:var(--bg)}
+#aviso{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:9px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw}
+#aviso.show{opacity:1}#aviso.bad{background:var(--bad)}
+@media(max-width:1000px){body{height:auto}main{grid-template-columns:1fr}.pn{max-height:60vh}.bot{grid-template-columns:1fr;height:auto}.bot .pn{min-height:220px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Gestor de horarios y reportes</h1>
+  <label class="load">1) Documento de materias (.json / .csv)<input type="file" id="fMat" accept=".json,.csv,.txt"></label>
+  <label class="load">2) data.json<input type="file" id="fDat" accept=".json"></label>
+  <span id="estado" class="mut">Sin datos cargados</span>
+</header>
+<main>
+  <section class="pn"><h2>Materias</h2><div class="sc" id="mats"></div></section>
+  <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
+  <section class="pn"><h2>Alumnos</h2><div class="sc" id="als"></div></section>
+</main>
+<div class="bot">
+  <section class="pn"><h2>Comentarios · <span id="quien">Selecciona un alumno</span></h2>
+    <div class="in">
+      <textarea id="nota" placeholder="Resolución del problema del alumno…"></textarea>
+      <div class="btns"><button class="b" id="btnListo">Marcar alumno como listo</button></div>
+    </div></section>
+  <section class="pn"><h2>Exportación a Excel (simulada)</h2>
+    <div class="in"><div class="sc" id="prev" style="padding:0"></div>
+      <div class="btns"><button class="b s" id="btnExp">Exportar a Excel (.csv)</button></div></div></section>
+</div>
+<div id="aviso"></div>
+<script>
+const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const pad=n=>String(n).padStart(2,'0'),fmt=h=>pad(Math.floor(h))+':'+pad(Math.round((h%1)*60));
+let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm;
+const abiertos=new Set();
+try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
+const guardar=()=>{try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
+const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
+const byNrc=n=>materias.find(m=>m.nrc===n);
+const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
+
+function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
+
+/* ---------- horarios: "Lunes y Miércoles 07:00-09:00" -> [{d,s,e}] ---------- */
+function slots(h){const out=[];
+  for(const seg of String(h||'').split(/[;\/\n]/)){
+    const t=seg.match(/(\d{1,2}):(\d{2})\s*(?:-|–|a)\s*(\d{1,2}):(\d{2})/);if(!t)continue;
+    const s=+t[1]+t[2]/60,e=+t[3]+t[4]/60;
+    for(const d of norm(seg).match(/lunes|martes|miercoles|jueves|viernes|sabado|domingo/g)||[])out.push({d:DIAS[d],s,e});
+  }return out}
+const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
+const conflictosCon=m=>get().n.filter(n=>n!==m.nrc).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
+
+/* ---------- carga de archivos ---------- */
+const normM=a=>(a||[]).map(m=>({nrc:Number(m.nrc),nombre:m.nombre||m.materia||'',horario:m.horario||'',profesor:m.profesor||'',sl:slots(m.horario)})).filter(m=>m.nrc);
+function csvM(t){
+  const L=t.replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()),sep=L[0].includes(';')?';':',';
+  const H=L[0].split(sep).map(x=>norm(x.trim())),ix=k=>H.findIndex(h=>h.startsWith(k));
+  return normM(L.slice(1).map(l=>{const c=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
+    return{nrc:c[ix('nrc')],nombre:c[ix('nombre')],horario:c[ix('horario')],profesor:ix('profesor')<0?'':c[ix('profesor')]}}));
+}
+function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
+  r.readAsText(f,'utf-8')}
+$('fMat').onchange=()=>leer($('fMat'),(t,n)=>{
+  if(/\.csv$/i.test(n))matsArchivo=csvM(t);else{const j=JSON.parse(t);matsArchivo=normM(Array.isArray(j)?j:j.materias)}
+  if(!matsArchivo.length)throw new Error('no se encontraron materias');aplicar()});
+$('fDat').onchange=()=>leer($('fDat'),t=>{datos=JSON.parse(t);aplicar()});
+function aplicar(){
+  materias=matsArchivo||(datos?normM(datos.materias):[]);
+  alumnos=datos?(datos.estudiantes||[]).map(a=>{
+    // Carga las 4 materias predeterminadas si el alumno no tiene horario en localStorage
+    if(!st[a.ci] && a.materias_inscriptas){
+      st[a.ci] = { n: [...a.materias_inscriptas], nota: '', listo: false };
+    }
+    return Object.assign({},a,{ci:String(a.ci)});
+  }):[];
+  reportes=datos?(datos.reportes||[]):[];
+  if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
+  $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
+  guardar();
+  renderTodo();
+  if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
+}
+/* ---------- acciones ---------- */
+function toggle(nrc){
+  const m=byNrc(nrc),cur=get();if(!m)return;
+  if(cur.n.includes(nrc))cur.n=cur.n.filter(x=>x!==nrc);
+  else{
+    if(!m.sl.length)return aviso('No se reconoce el horario de «'+m.nombre+'».',true);
+    const c=conflictosCon(m);
+    if(c.length)return aviso('«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.',true);
+    cur.n.push(nrc);
+  }
+  guardar();renderMaterias();renderHorario();
+}
+$('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(Number(d.dataset.nrc))};
+$('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(Number(d.dataset.q))};
+$('als').onclick = e => {
+  // Maneja el clic sobre el checkbox del problema
+  const chk = e.target.closest('.chk-prob');
+  if (chk) {
+    st.probs = st.probs || {};
+    st.probs[chk.dataset.key] = chk.checked;
+    guardar();
+    renderAlumnos();
+    return;
+  }
+  
+  // Maneja la selección del alumno y despliegue de detalles
+  const d = e.target.closest('.al');
+  if (!d) return;
+  const ci = d.dataset.ci;
+  if (e.target.closest('.arr')) abiertos.has(ci) ? abiertos.delete(ci) : abiertos.add(ci);
+  sel = ci;
+  renderTodo();
+};
+$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;guardar();renderPrev()};
+$('btnListo').onclick=()=>{
+  const c=get();
+  if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
+  c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
+};
+const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota}));
+$('btnExp').onclick=()=>{
+  const L=listos();if(!L.length)return aviso('Marca al menos un alumno como listo.',true);
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ')+'"';
+  const csv='\uFEFFsep=;\r\ncedula;resolucion\r\n'+L.map(x=>q(x.ci)+';'+q(x.nota)).join('\r\n');
+  const u=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+  a.href=u;a.download='resoluciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+  aviso('Exportado: '+L.length+' fila(s) → resoluciones.csv (ábrelo con Excel).');
+};
+
+/* ---------- render ---------- */
+function renderMaterias(){
+  const cur=get(),rep=new Set(reportes.filter(r=>sel&&String(r.ci)===sel).map(r=>Number(r.nrc)));
+  $('mats').innerHTML=materias.length?materias.map(m=>{
+    let cls='mat',tag='';
+    if(cur.n.includes(m.nrc)){cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
+    else if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
+    else{const c=conflictosCon(m);if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}}
+    if(rep.has(m.nrc))tag+='<em class="t warn">⚠ reportada</em>';
+    return '<div class="'+cls+'" data-nrc="'+m.nrc+'"><b>'+esc(m.nombre)+'</b><span class="n">'+m.nrc+'</span><small>'+esc(m.horario)+'</small>'+tag+'</div>';
+  }).join(''):'<p class="mut">Carga un documento de materias, o un data.json que las incluya.</p>';
+}
+function renderAlumnos(){
+  st.probs = st.probs || {};
+  $('als').innerHTML = alumnos.length ? alumnos.map(a => {
+    const rs = reportes.filter(r => String(r.ci) === a.ci), op = abiertos.has(a.ci), s = st[a.ci];
+    let det = '';
+    if (op) {
+      det = '<div class="rep">' + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
+        const m = byNrc(Number(r.nrc));
+        const key = a.ci + '_' + r.nrc + '_' + i;
+        const ok = !!st.probs[key];
+        return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
+               '<input type="checkbox" class="chk-prob" data-key="' + key + '" ' + (ok ? 'checked' : '') + '> ' +
+               '<div><b style="' + (ok ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + esc(r.tipo_error) + (r.motivo ? ' · ' + esc(r.motivo) : '') + '</b>' +
+               (ok ? ' <span style="color:var(--ok);font-size:11px;font-weight:bold">✓ Resuelto</span>' : '') +
+               '<br><small>' + (m ? '[' + m.nrc + '] ' + esc(m.nombre) : 'NRC ' + esc(r.nrc)) + '</small></div>' +
+               '</label></li>';
+      }).join('') + '</ul>'
+      : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
+    }
+    
+    // Contamos cuántos problemas han sido marcados como resueltos
+    const resueltos = rs.filter((r, i) => st.probs[a.ci + '_' + r.nrc + '_' + i]).length;
+    const badgeProbs = rs.length 
+      ? '<span class="bdg ' + (resueltos === rs.length ? 'ok' : '') + '" title="Problemas resueltos">' + resueltos + '/' + rs.length + '</span>'
+      : '<span class="bdg">0</span>';
+
+    return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
+      '<div class="who"><b>' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
+      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + badgeProbs + '</div>' + det + '</div>';
+  }).join('') : '<p class="mut">Carga el data.json para ver a los alumnos.</p>';
+}
+function renderHorario(){
+  const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
+  if(all.length){h0=Math.floor(Math.min(...all.map(x=>x.s)));h1=Math.ceil(Math.max(...all.map(x=>x.e)));if(all.some(x=>x.d===6))nd=7}
+  const H=40,alto=(h1-h0)*H,cur=get();
+  let h='<div class="grid" style="grid-template-columns:46px repeat('+nd+',1fr)"><div class="dh"></div>'+DN.slice(0,nd).map(d=>'<div class="dh">'+d+'</div>').join('');
+  h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:h1-h0},(_,i)=>'<div style="height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
+  for(let d=0;d<nd;d++){
+    h+='<div class="col" style="height:'+alto+'px;background-size:100% '+H+'px">';
+    for(const n of cur.n){const m=byNrc(n);if(!m)continue;
+      m.sl.filter(x=>x.d===d).forEach(x=>{h+='<div class="blk c'+(n%6)+'" data-q="'+n+'" title="Clic para quitar" style="top:'+(x.s-h0)*H+'px;height:'+(x.e-x.s)*H+'px"><b>'+esc(m.nombre)+'</b><span>'+fmt(x.s)+'–'+fmt(x.e)+'</span></div>'})}
+    h+='</div>';
+  }
+  $('hor').innerHTML=h+'</div>';
+}
+function renderPrev(){
+  const L=listos();
+  $('prev').innerHTML=L.length?'<table><tr><th>Cédula</th><th>Resolución</th></tr>'+L.map(x=>'<tr><td>'+esc(x.ci)+'</td><td>'+esc(x.nota)+'</td></tr>').join('')+'</table>':'<p class="mut">Aún no hay alumnos marcados como listos.</p>';
+}
+function renderBottom(){
+  const a=alumnos.find(x=>x.ci===sel),c=get();
+  $('quien').textContent=a?a.nombre+' · C.I. '+a.ci:'Selecciona un alumno';
+  $('nota').disabled=!a;$('nota').value=a?c.nota:'';
+  $('btnListo').disabled=!a;$('btnListo').textContent=a&&c.listo?'Quitar “listo”':'Marcar alumno como listo';
+  renderPrev();
+}
+function renderTodo(){renderMaterias();renderAlumnos();renderHorario();renderBottom()}
+renderTodo();
+</script>
+</body>
+</html>
