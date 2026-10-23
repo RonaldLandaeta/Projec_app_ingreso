@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestor de horarios con filtro de malla</title>
+<style>
+:root{--bg:#f4f5f7;--pn:#fff;--tx:#1d2330;--mut:#667085;--bd:#dde1e8;--ac:#3b6ef5;--acs:#e6edff;--bad:#d92d20;--bads:#fde8e6;--ok:#12805c;--oks:#def5ec;--wn:#b54708}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--pn:#1d222b;--tx:#e8ebf1;--mut:#9aa3b2;--bd:#323946;--ac:#7c9cff;--acs:#27325a;--bad:#ff7a70;--bads:#3d2220;--ok:#4cd6a0;--oks:#16372c;--wn:#f5a65b}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
+h1{font-size:16px;margin:0}
+.load{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
+.mut,small{color:var(--mut)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 300px;gap:10px;padding:10px}
+.pn{background:var(--pn);border:1px solid var(--bd);border-radius:10px;display:flex;flex-direction:column;min-height:0}
+.pn>h2{font-size:12px;margin:0;padding:10px 12px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.sc{overflow:auto;padding:8px;flex:1;min-height:0}
+.mat{border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;position:relative}
+.mat:hover{border-color:var(--ac)}
+.mat .n{position:absolute;right:10px;top:8px;font-size:11px;color:var(--mut)}
+.mat small{display:block}
+.mat.on{background:var(--acs);border-color:var(--ac)}
+.mat.off{opacity:.55;cursor:not-allowed}
+.t{display:inline-block;font-style:normal;font-size:11px;padding:1px 7px;border-radius:99px;margin:4px 4px 0 0;background:var(--bd)}
+.t.ok{background:var(--oks);color:var(--ok)}.t.bad{background:var(--bads);color:var(--bad)}.t.warn{color:var(--wn);background:transparent;border:1px solid var(--wn)}
+.al{border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
+.al.sel{border-color:var(--ac);background:var(--acs)}
+.flt{display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mut)}
+.flt label{display:flex;align-items:center;gap:4px}
+.flt select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:3px 4px;max-width:160px}
+.row{display:flex;align-items:center;gap:8px;padding:7px 8px;cursor:pointer}
+.who{flex:1;min-width:0}.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arr{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:6px;width:26px;height:26px;cursor:pointer}
+.arr:hover{border-color:var(--ac)}
+.bdg{font-size:11px;min-width:22px;text-align:center;padding:1px 6px;border-radius:99px;background:var(--bd)}
+.bdg.ok{background:var(--oks);color:var(--ok)}
+.rep{padding:0 10px 8px 42px;font-size:13px}.rep ul{margin:0;padding-left:16px}.rep li{margin-bottom:4px}
+.grid{display:grid;min-width:560px}
+.dh{text-align:center;font-weight:600;font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd);background:var(--pn);position:sticky;top:0;z-index:2}
+.hrs div{font-size:11px;color:var(--mut);text-align:right;padding-right:6px}
+.col{position:relative;border-left:1px solid var(--bd);background-image:linear-gradient(var(--bd) 1px,transparent 1px)}
+.blk{position:absolute;left:2px;right:2px;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer;overflow:hidden;color:#1d2330;background:hsl(var(--h) 70% 84%);border-left:4px solid hsl(var(--h) 60% 42%)}
+.blk:hover{outline:2px solid var(--bad)}.blk span{display:block;font-size:11px;opacity:.8}
+.c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
+.bot{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px;height:210px}
+.bot .in{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
+textarea{flex:1;resize:none;border:1px solid var(--bd);border-radius:8px;padding:8px;font:inherit;background:var(--bg);color:var(--tx)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button.b{border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+button.b.s{background:transparent;color:var(--ac)}
+button:disabled,textarea:disabled{opacity:.5;cursor:not-allowed}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid var(--bd);padding:4px 8px;text-align:left}th{background:var(--bg)}
+#aviso{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:9px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw}
+#aviso.show{opacity:1}#aviso.bad{background:var(--bad)}
+@media(max-width:1000px){body{height:auto}main{grid-template-columns:1fr}.pn{max-height:60vh}.bot{grid-template-columns:1fr;height:auto}.bot .pn{min-height:220px}}
+
+[hidden]{display:none!important}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
+.top h1{font-size:16px;margin:0 8px 0 0}
+.step{font-size:13px;color:var(--mut);padding:3px 10px;border-radius:99px}.step.on{background:var(--acs);color:var(--ac);font-weight:600}
+#fase1{flex:1;overflow:auto}#fase2{flex:1;min-height:0;display:flex;flex-direction:column}
+.f1main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:14px}
+#fase1 .card{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:14px}
+#fase1 .card h2{margin:0 0 10px;font-size:14px}
+#fase1 .frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#fase1 ul{margin:8px 0 0;padding:0;list-style:none}#fase1 li{padding:5px 0;border-top:1px solid var(--bd);font-size:13px}
+#fase1 .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--bd);margin-left:6px}
+#fase1 .pill.ok{background:var(--oks);color:var(--ok)}#fase1 .pill.bad{background:var(--bads);color:var(--bad)}
+#fase1 button{border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+#fase1 button.s{background:transparent;color:var(--ac)}#fase1 button:disabled{opacity:.5;cursor:not-allowed}
+#fase1 .tb{overflow:auto;max-height:55vh;margin-top:10px}#fase1 th{position:sticky;top:0;background:var(--pn)}
+#fase1 tr.no td{color:var(--mut);text-decoration:line-through}.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<nav class="top">
+  <h1>Gestor de horarios y reportes</h1>
+  <span id="p1" class="step on">1 · Filtro de malla</span><span class="mut">→</span><span id="p2" class="step">2 · Gestor de horarios</span>
+  <button class="b s" id="volver" hidden>← Volver al filtro</button>
+</nav>
+<div id="fase1">
+<div class="f1main">
+  <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
+  <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
+    <p class="mut">La primera fila son los encabezados (no importan mayúsculas ni tildes). Se aceptan .xlsx (primera hoja), .csv y .json.</p>
+    <table><tr><th>Columna</th><th>Encabezados que se reconocen</th><th>Uso</th></tr>
+      <tr><td>Código</td><td>Codigo, Cod, ID, Clave, NRC, Sigla</td><td>Criterio principal de comparación (opcional)</td></tr>
+      <tr><td>Materia</td><td>Materia, Nombre, Asignatura, Curso</td><td>Respaldo cuando no hay código</td></tr>
+      <tr><td>Otras</td><td>Carrera, Seccion, Horario, Profesor…</td><td>Se conservan y se muestran como detalles</td></tr></table>
+    <p class="mut">La malla debe tener al menos Código o Materia. Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
+    <button class="s" id="bPlant">Descargar plantilla CSV</button></details></section>
+  <section class="card">
+    <h2>1 · Malla curricular principal</h2>
+    <input type="file" id="fMalla" accept=".xlsx,.csv,.json,.txt">
+    <div id="infoMalla" class="mut" style="margin-top:8px">Aún no se ha cargado la malla.</div>
+  </section>
+  <section class="card">
+    <h2>2 · Archivos de materias (distintas carreras y secciones)</h2>
+    <div class="frow"><input type="file" id="fArch" multiple accept=".xlsx,.csv,.json,.txt"><button class="s" id="bLimpiar">Limpiar archivos</button></div>
+    <ul id="lista"></ul>
+  </section>
+  <section class="card">
+    <h2>Materias que pertenecen a la malla <span id="cnt" class="pill ok">0</span></h2>
+    <div class="frow">
+      <button id="bExp" disabled>Descargar Excel (.xlsx)</button>
+      <button class="s" id="bCsv" disabled>Descargar CSV</button>
+      <label class="mut"><input type="checkbox" id="verNo"> Mostrar también las descartadas (auditoría)</label>
+    </div>
+    <div class="tb" id="res"><p class="mut">Carga la malla y al menos un archivo.</p></div>
+  </section>
+  <section class="card">
+    <h2>Materias de la malla sin oferta en los archivos cargados</h2>
+    <div id="faltan" class="mut">—</div>
+  </section>
+  <section class="card"><h2>3 · Continuar</h2><div class="frow">
+    <button id="bGo" disabled>Continuar al gestor de horarios →</button>
+    <button class="s" id="bSkip">Omitir filtro (usar las materias del data.json)</button>
+    <span class="mut" id="goInfo"></span></div></section>
+</div>
+</div>
+<div id="fase2" hidden>
+<header>
+  <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
+  <span id="estado" class="mut">Sin datos cargados</span>
+</header>
+<main>
+  <section class="pn"><h2>Materias</h2><div class="sc" id="mats"></div></section>
+  <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
+  <section class="pn"><h2>Alumnos</h2>
+    <div class="flt">
+      <label>Tipo <select id="fPerfil"><option value="">Todos los tipos</option></select></label>
+      <label><input type="checkbox" id="fOcultar"> Ocultar los listos</label>
+      <span id="fCnt" style="width:100%"></span>
+    </div>
+    <div class="sc" id="als"></div></section>
+</main>
+<div class="bot">
+  <section class="pn"><h2>Comentarios · <span id="quien">Selecciona un alumno</span></h2>
+    <div class="in">
+      <textarea id="nota" placeholder="Resolución del problema del alumno…"></textarea>
+      <div class="btns"><button class="b" id="btnListo">Marcar alumno como listo</button></div>
+    </div></section>
+  <section class="pn"><h2>Exportación a Excel (simulada)</h2>
+    <div class="in"><div class="sc" id="prev" style="padding:0"></div>
+      <div class="btns"><button class="b s" id="btnExp">Exportar a Excel (.csv)</button></div></div></section>
+</div>
+</div>
+<div id="aviso"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* nombre: MAYÚSCULAS, sin tildes ni signos, sin espacios sobrantes y números romanos como arabigos ("Cálculo I " = "CALCULO 1") */
+const ROM={I:1,II:2,III:3,IV:4,V:5,VI:6,VII:7,VIII:8,IX:9,X:10};
+const nz=s=>String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim().split(' ').map(w=>ROM[w]||w).join(' ');
+/* código: "MAT-101" == "mat 101" == "MAT101"; los numéricos ignoran ceros a la izquierda */
+const nc=s=>{const c=String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');return /^\d+$/.test(c)?c.replace(/^0+(?=\d)/,''):c};
+
+let malla=null,archivos=[];
+
+/* ---------- lectura y parseo ---------- */
+async function leerTexto(f){const b=await f.arrayBuffer();
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(e){return new TextDecoder('windows-1252').decode(b)}}
+function csv(t){
+  t=t.replace(/^\uFEFF/,'').replace(/^sep=.\r?\n/i,'');
+  const first=t.split(/\r?\n/,1)[0];
+  const sep=[';','\t',','].map(s=>[s,first.split(s).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let r=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===sep){r.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;r.push(f);rows.push(r);r=[];f=''}
+    else f+=c}
+  if(f||r.length){r.push(f);rows.push(r)}
+  const H=(rows.shift()||[]).map(x=>x.trim());
+  return rows.filter(x=>x.some(v=>v.trim())).map(x=>Object.fromEntries(H.map((h,i)=>[h,(x[i]||'').trim()])));
+}
+const flat=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,Array.isArray(v)?v.join(', '):(v&&typeof v==='object'?JSON.stringify(v):v)]));
+function jrows(j){
+  if(Array.isArray(j))return j.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(flat);
+  for(const k in j){const v=j[k];if(Array.isArray(v)&&v.length&&v[0]&&typeof v[0]==='object')return jrows(v)}
+  return[];
+}
+const KC=['CODIGO','COD','ID','CLAVE','NRC','SIGLA'],KN=['NOMBRE','MATERIA','ASIGNATURA','CURSO','NAME'];
+function columna(keys,L,excluir){
+  const ok=k=>!(excluir&&/PROFESOR|DOCENTE|ALUMNO|ESTUDIANTE/.test(nz(k)));
+  return keys.find(k=>ok(k)&&L.includes(nz(k)))||keys.find(k=>ok(k)&&L.some(x=>nz(k).startsWith(x+' ')))||null;
+}
+async function parsear(nombre,dato){
+  if(dato==null)throw new Error('no se pudo leer el archivo');
+  if(/\.xls$/i.test(nombre))throw new Error('formato .xls antiguo: guárdalo como .xlsx o .csv');
+  if(!/\.(csv|json|txt|xlsx)$/i.test(nombre))throw new Error('formato no admitido (usa .xlsx, .csv o .json)');
+  let rows;
+  if(/\.xlsx$/i.test(nombre))rows=await xlsxRows(dato);
+  else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrows(JSON.parse(dato.replace(/^\uFEFF/,'')));
+  else rows=csv(dato);
+  if(!rows.length)throw new Error('no se encontraron filas');
+  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true);
+  if(!c&&!n)throw new Error('no hay columna de código ni de nombre de materia');
+  const items=rows.map(r=>{
+    const extra=Object.entries(r).filter(([k,v])=>k!==c&&k!==n&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
+    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',extra,row:r};
+  }).filter(it=>it.code||it.name);
+  return{items,c,n};
+}
+
+/* ---------- lector .xlsx sin librerías ---------- */
+async function inflar(u8){const ds=new DecompressionStream('deflate-raw'),w=ds.writable.getWriter();w.write(u8);w.close();return new Uint8Array(await new Response(ds.readable).arrayBuffer())}
+async function xlsxRows(buf){
+  if(typeof DecompressionStream==='undefined')throw new Error('este navegador no puede leer .xlsx; usa .csv');
+  const u=new Uint8Array(buf),dv=new DataView(buf),dec=new TextDecoder();
+  let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;
+  if(e<0)throw new Error('el archivo .xlsx está dañado o no es un Excel válido');
+  const n=dv.getUint16(e+10,true),files={};let p=dv.getUint32(e+16,true);
+  for(let i=0;i<n;i++){
+    const nl=dv.getUint16(p+28,true);
+    files[dec.decode(u.subarray(p+46,p+46+nl))]={m:dv.getUint16(p+10,true),cs:dv.getUint32(p+20,true),o:dv.getUint32(p+42,true)};
+    p+=46+nl+dv.getUint16(p+30,true)+dv.getUint16(p+32,true);
+  }
+  const leerX=async nm=>{const f=files[nm];if(!f)return null;
+    const s=f.o+30+dv.getUint16(f.o+26,true)+dv.getUint16(f.o+28,true),d=u.subarray(s,s+f.cs);
+    return dec.decode(f.m===0?d:await inflar(d))};
+  const hoja=files['xl/worksheets/sheet1.xml']?'xl/worksheets/sheet1.xml':Object.keys(files).filter(k=>/^xl\/worksheets\/[^/]+\.xml$/.test(k)).sort()[0];
+  if(!hoja)throw new Error('no se encontró ninguna hoja en el .xlsx');
+  const xml=s=>new DOMParser().parseFromString(s,'application/xml');
+  const sst=await leerX('xl/sharedStrings.xml'),ss=sst?[...xml(sst).getElementsByTagName('si')].map(x=>x.textContent):[];
+  const col=r=>{let k=0;for(const ch of r.replace(/[^A-Z]/g,''))k=k*26+ch.charCodeAt(0)-64;return k-1};
+  const rows=[...xml(await leerX(hoja)).getElementsByTagName('row')].map(r=>{
+    const a=[];
+    for(const c of r.getElementsByTagName('c')){
+      const t=c.getAttribute('t'),v=c.getElementsByTagName('v')[0];
+      a[col(c.getAttribute('r')||'A')]=t==='s'&&v?ss[+v.textContent]:t==='inlineStr'?c.textContent:v?v.textContent:'';
+    }return a});
+  const H=(rows.shift()||[]).map(x=>String(x==null?'':x).trim());
+  return rows.filter(r=>r.some(v=>String(v==null?'':v).trim())).map(r=>Object.fromEntries(H.map((h,i)=>[h,String(r[i]==null?'':r[i]).trim()]).filter(([h])=>h)));
+}
+
+/* ---------- carga ---------- */
+async function ingest(tipo,nombre,dato){
+  let p,error=null;
+  try{p=await parsear(nombre,dato)}catch(e){error=e.message}
+  if(tipo==='malla'){
+    if(error){malla=null;$('infoMalla').innerHTML='<span class="err">No se pudo leer «'+esc(nombre)+'»: '+esc(error)+'.</span>'}
+    else{
+      malla={nombre,entries:p.items,byCode:new Map(),byName:new Map()};
+      for(const e of p.items){if(e.code)malla.byCode.set(e.code,e);if(e.name&&!malla.byName.has(e.name))malla.byName.set(e.name,e)}
+      const cc=p.items.filter(e=>e.code).length;
+      $('infoMalla').innerHTML='<b>'+esc(nombre)+'</b>: '+p.items.length+' materias en la lista blanca ('+cc+' con código, '+(p.items.length-cc)+' solo con nombre). '+
+        'Criterio: <b>código</b> si existe; si no, <b>nombre</b>.';
+    }
+  }else{
+    archivos=archivos.filter(a=>a.nombre!==nombre);
+    archivos.push({nombre,items:p?p.items:[],error});
+  }
+  renderFiltro();
+}
+async function desdeArchivo(tipo,f){
+  let d=null;
+  try{d=/\.xlsx$/i.test(f.name)?await f.arrayBuffer():await leerTexto(f)}catch(e){}
+  await ingest(tipo,f.name,d);
+}
+$('fMalla').onchange=async e=>{const f=e.target.files[0];if(f)await desdeArchivo('malla',f)};
+$('fArch').onchange=async e=>{const fs=[...e.target.files];for(const f of fs)await desdeArchivo('arch',f);e.target.value=''};
+$('bLimpiar').onclick=()=>{archivos=[];renderFiltro()};
+$('verNo').onchange=renderFiltro;
+
+/* ---------- filtrado: código primero, nombre como respaldo ---------- */
+function evaluar(it){
+  if(it.code){
+    if(malla.byCode.has(it.code))return[malla.byCode.get(it.code),'código'];
+    const e=malla.byName.get(it.name);                 // el código no coincide: solo vale si la malla no trae código para esa materia
+    return e&&!e.code?[e,'nombre']:null;
+  }
+  const e=malla.byName.get(it.name);
+  return e?[e,'nombre']:null;
+}
+let aceptadas=[];
+function renderFiltro(){
+  const ok=[],no=[],cubiertas=new Set(),porArchivo=[];
+  if(malla){
+    for(const a of archivos){
+      let y=0,n=0;
+      for(const it of a.items){
+        const m=evaluar(it);
+        if(m){y++;cubiertas.add(m[0]);ok.push({a:a.nombre,it,por:m[1]})}else{n++;no.push({a:a.nombre,it})}
+      }
+      porArchivo.push([a,y,n]);
+    }
+  }
+  aceptadas=ok;
+  $('lista').innerHTML=archivos.length?archivos.map(a=>{
+    const f=porArchivo.find(x=>x[0]===a);
+    return '<li><b>'+esc(a.nombre)+'</b>'+(a.error?' <span class="err">— '+esc(a.error)+'</span>':
+      ' <span class="pill">'+a.items.length+' filas</span>'+(f?'<span class="pill ok">'+f[1]+' en la malla</span><span class="pill bad">'+f[2]+' descartadas</span>':''))+'</li>';
+  }).join(''):'<li class="mut">Sin archivos cargados.</li>';
+
+  $('cnt').textContent=ok.length;$('bExp').disabled=$('bCsv').disabled=$('bGo').disabled=!ok.length;$('goInfo').textContent=ok.length?ok.length+' materia(s) pasarán al gestor de horarios.':'';
+  if(!malla){$('res').innerHTML='<p class="mut">Primero carga la malla curricular principal.</p>';$('faltan').textContent='—';return}
+  const ver=$('verNo').checked,filas=ok.map(x=>({...x,s:1})).concat(ver?no.map(x=>({...x,s:0})):[]);
+  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Código</th><th>Materia</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Detalles</th></tr>'+
+    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.rawName)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada')+'</td>':'')+
+      '<td>'+(x.s?esc(x.por):'—')+'</td><td>'+esc(x.it.extra)+'</td></tr>').join('')+'</table>'
+    :'<p class="mut">'+(archivos.length?'Ninguna materia de los archivos pertenece a la malla.':'Carga al menos un archivo de materias.')+'</p>';
+  const falt=malla.entries.filter(e=>!cubiertas.has(e));
+  $('faltan').innerHTML=!archivos.length?'—':falt.length?falt.map(e=>'<span class="pill bad">'+esc(e.rawCode?e.rawCode+' · ':'')+esc(e.rawName)+'</span>').join(' '):'<span class="pill ok">Todas las materias de la malla tienen oferta.</span>';
+}
+/* ---------- descarga: .xlsx real (zip sin comprimir) y .csv ---------- */
+const CRC=(()=>{const T=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;T[n]=c>>>0}return T})();
+const crc32=u=>{let c=0xFFFFFFFF;for(const b of u)c=CRC[(c^b)&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+function zip(files){
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  for(const f of files){
+    const nm=enc.encode(f.name),d=enc.encode(f.data),crc=crc32(d);
+    const lh=new Uint8Array(30+nm.length),v=new DataView(lh.buffer);
+    v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x0800,true);
+    v.setUint32(14,crc,true);v.setUint32(18,d.length,true);v.setUint32(22,d.length,true);v.setUint16(26,nm.length,true);lh.set(nm,30);
+    const ch=new Uint8Array(46+nm.length),c=new DataView(ch.buffer);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);ch.set(nm,46);
+    parts.push(lh,d);cen.push(ch);off+=lh.length+d.length;
+  }
+  const end=new Uint8Array(22),e=new DataView(end.buffer);
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,cen.reduce((n,x)=>n+x.length,0),true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function xlsx(filas){
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',R='http://schemas.openxmlformats.org/package/2006/relationships',O='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const limpio=v=>esc(String(v==null?'':v).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,''));
+  const hoja=H+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+filas.map((r,i)=>'<row r="'+(i+1)+'">'+
+    r.map((v,j)=>'<c r="'+String.fromCharCode(65+j)+(i+1)+'" t="inlineStr"><is><t xml:space="preserve">'+limpio(v)+'</t></is></c>').join('')+'</row>').join('')+'</sheetData></worksheet>';
+  return zip([
+    {name:'[Content_Types].xml',data:H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+    {name:'_rels/.rels',data:H+'<Relationships xmlns="'+R+'"><Relationship Id="rId1" Type="'+O+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml',data:H+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+O+'"><sheets><sheet name="Materias en la malla" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',data:H+'<Relationships xmlns="'+R+'"><Relationship Id="rId1" Type="'+O+'/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
+    {name:'xl/worksheets/sheet1.xml',data:hoja}]);
+}
+function descargar(blob,nombre){
+  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+}
+const filasExport=()=>[['Archivo','Codigo','Materia','Coincidio por','Detalles']].concat(aceptadas.map(x=>[x.a,x.it.rawCode,x.it.rawName,x.por,x.it.extra]));
+$('bExp').onclick=()=>{try{descargar(xlsx(filasExport()),'materias_en_malla.xlsx')}catch(e){alert('No se pudo generar el Excel: '+e.message)}};
+$('bCsv').onclick=()=>{
+  const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  descargar(new Blob(['\uFEFFsep=;\r\n'+filasExport().map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'materias_en_malla.csv');
+};
+$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Materia;Carrera;Seccion\r\nMAT-101;Calculo I;Ingenieria;A\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
+
+
+const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
+const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const pad=n=>String(n).padStart(2,'0'),fmt=h=>pad(Math.floor(h))+':'+pad(Math.round((h%1)*60));
+let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm;
+const abiertos=new Set();
+try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
+const guardar=()=>{try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
+const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
+const byNrc=n=>materias.find(m=>m.nrc===n);
+const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
+
+function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
+
+/* ---------- horarios: "Lunes y Miércoles 07:00-09:00" -> [{d,s,e}] ---------- */
+function slots(h){const out=[];
+  for(const seg of String(h||'').split(/[;\/\n]/)){
+    const t=seg.match(/(\d{1,2}):(\d{2})\s*(?:-|–|a)\s*(\d{1,2}):(\d{2})/);if(!t)continue;
+    const s=+t[1]+t[2]/60,e=+t[3]+t[4]/60;
+    for(const d of norm(seg).match(/lunes|martes|miercoles|jueves|viernes|sabado|domingo/g)||[])out.push({d:DIAS[d],s,e});
+  }return out}
+const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
+const conflictosCon=m=>get().n.filter(n=>n!==m.nrc).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
+
+/* ---------- carga de archivos ---------- */
+const normM=a=>(a||[]).map(m=>({nrc:Number(m.nrc),nombre:m.nombre||m.materia||'',horario:m.horario||'',profesor:m.profesor||'',sl:slots(m.horario)})).filter(m=>m.nrc);
+function csvM(t){
+  const L=t.replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()),sep=L[0].includes(';')?';':',';
+  const H=L[0].split(sep).map(x=>norm(x.trim())),ix=k=>H.findIndex(h=>h.startsWith(k));
+  return normM(L.slice(1).map(l=>{const c=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
+    return{nrc:c[ix('nrc')],nombre:c[ix('nombre')],horario:c[ix('horario')],profesor:ix('profesor')<0?'':c[ix('profesor')]}}));
+}
+function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
+  r.readAsText(f,'utf-8')}
+$('fDat').onchange=()=>leer($('fDat'),t=>{datos=JSON.parse(t);aplicar()});
+function aplicar(){
+  materias=matsArchivo||(datos?normM(datos.materias):[]);
+  alumnos=datos?(datos.estudiantes||[]).map(a=>{
+    // Carga las 4 materias predeterminadas si el alumno no tiene horario en localStorage
+    if(!st[a.ci] && a.materias_inscriptas){
+      st[a.ci] = { n: [...a.materias_inscriptas], nota: '', listo: false };
+    }
+    return Object.assign({},a,{ci:String(a.ci)});
+  }):[];
+  reportes=datos?(datos.reportes||[]):[];
+  if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
+  $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
+  guardar();
+  renderTodo();
+  if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
+}
+/* ---------- acciones ---------- */
+function toggle(nrc){
+  const m=byNrc(nrc),cur=get();if(!m)return;
+  if(cur.n.includes(nrc))cur.n=cur.n.filter(x=>x!==nrc);
+  else{
+    if(!m.sl.length)return aviso('No se reconoce el horario de «'+m.nombre+'».',true);
+    const c=conflictosCon(m);
+    if(c.length)return aviso('«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.',true);
+    cur.n.push(nrc);
+  }
+  guardar();renderMaterias();renderHorario();
+}
+$('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(Number(d.dataset.nrc))};
+$('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(Number(d.dataset.q))};
+$('als').onclick = e => {
+  // Maneja el clic sobre el checkbox del problema
+  const chk = e.target.closest('.chk-prob');
+  if (chk) {
+    st.probs = st.probs || {};
+    st.probs[chk.dataset.key] = chk.checked;
+    guardar();
+    renderAlumnos();
+    return;
+  }
+  
+  // Maneja la selección del alumno y despliegue de detalles
+  const d = e.target.closest('.al');
+  if (!d) return;
+  const ci = d.dataset.ci;
+  if (e.target.closest('.arr')) abiertos.has(ci) ? abiertos.delete(ci) : abiertos.add(ci);
+  sel = ci;
+  renderTodo();
+};
+$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;guardar();renderPrev()};
+$('btnListo').onclick=()=>{
+  const c=get();
+  if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
+  c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
+};
+const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota}));
+$('btnExp').onclick=()=>{
+  const L=listos();if(!L.length)return aviso('Marca al menos un alumno como listo.',true);
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ')+'"';
+  const csv='\uFEFFsep=;\r\ncedula;resolucion\r\n'+L.map(x=>q(x.ci)+';'+q(x.nota)).join('\r\n');
+  const u=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+  a.href=u;a.download='resoluciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+  aviso('Exportado: '+L.length+' fila(s) → resoluciones.csv (ábrelo con Excel).');
+};
+
+/* ---------- render ---------- */
+function renderMaterias(){
+  const cur=get(),rep=new Set(reportes.filter(r=>sel&&String(r.ci)===sel).map(r=>Number(r.nrc)));
+  $('mats').innerHTML=materias.length?materias.map(m=>{
+    let cls='mat',tag='';
+    if(cur.n.includes(m.nrc)){cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
+    else if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
+    else{const c=conflictosCon(m);if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}}
+    if(rep.has(m.nrc))tag+='<em class="t warn">⚠ reportada</em>';
+    return '<div class="'+cls+'" data-nrc="'+m.nrc+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>';
+  }).join(''):'<p class="mut">No hay materias: vuelve al filtro, o carga un data.json que las incluya.</p>';
+}
+let fPerfil = '', fOrden = 'pend', fOcultar = false;
+const perfilDe = a => a.perfil || 'Alumno';
+const pendientes = a => reportes.filter(r => String(r.ci) === a.ci)
+  .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
+$('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
+$('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
+
+function renderAlumnos(){
+  st.probs = st.probs || {};
+  // --- mini menú: tipos con su cantidad ---
+  const tipos = ['Alumno', 'Beca trabajo', 'Deportista', 'Ayudante especial'];
+  alumnos.forEach(a => { if (!tipos.includes(perfilDe(a))) tipos.push(perfilDe(a)); });
+  $('fPerfil').innerHTML = '<option value="">Todos los tipos (' + alumnos.length + ')</option>' +
+    tipos.map(t => '<option value="' + esc(t) + '"' + (t === fPerfil ? ' selected' : '') + '>' + esc(t) +
+      ' (' + alumnos.filter(a => perfilDe(a) === t).length + ')</option>').join('');
+  // --- filtrar y ordenar: con quién concentrarse primero ---
+  const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
+  const nom = a => String(a.nombre || '');
+  if (fOrden === 'pend') lista.sort((a, b) => pendientes(b) - pendientes(a) || nom(a).localeCompare(nom(b)));
+  else if (fOrden === 'nombre') lista.sort((a, b) => nom(a).localeCompare(nom(b)));
+  $('fCnt').textContent = alumnos.length
+    ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientes(a), 0) + ' problema(s) pendiente(s)'
+    : '';
+  $('als').innerHTML = lista.length ? lista.map(a => {
+    const rs = reportes.filter(r => String(r.ci) === a.ci), op = abiertos.has(a.ci), s = st[a.ci];
+    let det = '';
+    if (op) {
+      det = '<div class="rep">' + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
+        const m = byNrc(Number(r.nrc));
+        const key = a.ci + '_' + r.nrc + '_' + i;
+        const ok = !!st.probs[key];
+        return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
+               '<input type="checkbox" class="chk-prob" data-key="' + key + '" ' + (ok ? 'checked' : '') + '> ' +
+               '<div><b style="' + (ok ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + esc(r.tipo_error) + (r.motivo ? ' · ' + esc(r.motivo) : '') + '</b>' +
+               (ok ? ' <span style="color:var(--ok);font-size:11px;font-weight:bold">✓ Resuelto</span>' : '') +
+               '<br><small>' + (m ? '[' + m.nrc + '] ' + esc(m.nombre) : 'NRC ' + esc(r.nrc)) + '</small></div>' +
+               '</label></li>';
+      }).join('') + '</ul>'
+      : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
+    }
+    
+    // Contamos cuántos problemas han sido marcados como resueltos
+    const resueltos = rs.filter((r, i) => st.probs[a.ci + '_' + r.nrc + '_' + i]).length;
+    const badgeProbs = rs.length 
+      ? '<span class="bdg ' + (resueltos === rs.length ? 'ok' : '') + '" title="Problemas resueltos">' + resueltos + '/' + rs.length + '</span>'
+      : '<span class="bdg">0</span>';
+
+    return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
+      '<div class="who"><b>' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
+      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + badgeProbs + '</div>' + det + '</div>';
+  }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
+                                : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
+}
+function renderHorario(){
+  const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
+  if(all.length){h0=Math.floor(Math.min(...all.map(x=>x.s)));h1=Math.ceil(Math.max(...all.map(x=>x.e)));if(all.some(x=>x.d===6))nd=7}
+  const H=40,alto=(h1-h0)*H,cur=get();
+  let h='<div class="grid" style="grid-template-columns:46px repeat('+nd+',1fr)"><div class="dh"></div>'+DN.slice(0,nd).map(d=>'<div class="dh">'+d+'</div>').join('');
+  h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:h1-h0},(_,i)=>'<div style="height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
+  for(let d=0;d<nd;d++){
+    h+='<div class="col" style="height:'+alto+'px;background-size:100% '+H+'px">';
+    for(const n of cur.n){const m=byNrc(n);if(!m)continue;
+      m.sl.filter(x=>x.d===d).forEach(x=>{h+='<div class="blk c'+(n%6)+'" data-q="'+n+'" title="Clic para quitar" style="top:'+(x.s-h0)*H+'px;height:'+(x.e-x.s)*H+'px"><b>'+esc(m.nombre)+'</b><span>'+fmt(x.s)+'–'+fmt(x.e)+'</span></div>'})}
+    h+='</div>';
+  }
+  $('hor').innerHTML=h+'</div>';
+}
+function renderPrev(){
+  const L=listos();
+  $('prev').innerHTML=L.length?'<table><tr><th>Cédula</th><th>Resolución</th></tr>'+L.map(x=>'<tr><td>'+esc(x.ci)+'</td><td>'+esc(x.nota)+'</td></tr>').join('')+'</table>':'<p class="mut">Aún no hay alumnos marcados como listos.</p>';
+}
+function renderBottom(){
+  const a=alumnos.find(x=>x.ci===sel),c=get();
+  $('quien').textContent=a?a.nombre+' · C.I. '+a.ci:'Selecciona un alumno';
+  $('nota').disabled=!a;$('nota').value=a?c.nota:'';
+  $('btnListo').disabled=!a;$('btnListo').textContent=a&&c.listo?'Quitar “listo”':'Marcar alumno como listo';
+  renderPrev();
+}
+function renderTodo(){renderMaterias();renderAlumnos();renderHorario();renderBottom()}
+renderTodo();
+
+
+/* ---------- puente: materias filtradas -> gestor ---------- */
+function materiasFiltradas(){
+  const usados=new Set(),out=[];let libre=900001;
+  for(const x of aceptadas){
+    const r=x.it.row,ks=Object.keys(r),val=(L,ex)=>{const k=columna(ks,L,ex);return k?String(r[k]||'').trim():''};
+    const cod=String(x.it.rawCode||'').trim(),num=/^\d+$/.test(cod)?Number(cod):0,id=num&&!usados.has(num)?num:libre++;
+    usados.add(id);
+    const hor=val(['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'],true);
+    out.push({nrc:id,cod,nombre:x.it.rawName||cod,horario:hor,profesor:val(['PROFESOR','DOCENTE'],false),
+      det:[val(['CARRERA','PROGRAMA'],true),val(['SECCION','GRUPO'],true)].filter(Boolean).join(' · '),sl:slots(hor)});
+  }
+  return out;
+}
+function fase(n){
+  $('fase1').hidden=n!==1;$('fase2').hidden=n!==2;$('volver').hidden=n!==2;
+  $('p1').className='step'+(n===1?' on':'');$('p2').className='step'+(n===2?' on':'');
+  if(n===2)aplicar();
+}
+$('bGo').onclick=()=>{matsArchivo=materiasFiltradas();fase(2)};
+$('bSkip').onclick=()=>{matsArchivo=null;fase(2)};
+$('volver').onclick=()=>fase(1);
+renderFiltro();fase(1);
+</script>
+</body>
+</html>

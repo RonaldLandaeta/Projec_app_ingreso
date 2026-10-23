@@ -1,4 +1,4 @@
-<!DOCTYPE html> /prueba
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -27,6 +27,9 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 300px;gap:
 .t.ok{background:var(--oks);color:var(--ok)}.t.bad{background:var(--bads);color:var(--bad)}.t.warn{color:var(--wn);background:transparent;border:1px solid var(--wn)}
 .al{border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
 .al.sel{border-color:var(--ac);background:var(--acs)}
+.flt{display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mut)}
+.flt label{display:flex;align-items:center;gap:4px}
+.flt select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:3px 4px;max-width:160px}
 .row{display:flex;align-items:center;gap:8px;padding:7px 8px;cursor:pointer}
 .who{flex:1;min-width:0}.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .arr{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:6px;width:26px;height:26px;cursor:pointer}
@@ -64,7 +67,14 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
 <main>
   <section class="pn"><h2>Materias</h2><div class="sc" id="mats"></div></section>
   <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
-  <section class="pn"><h2>Alumnos</h2><div class="sc" id="als"></div></section>
+  <section class="pn"><h2>Alumnos</h2>
+    <div class="flt">
+      <label>Tipo <select id="fPerfil"><option value="">Todos los tipos</option></select></label>
+      <label>Orden <select id="fOrden"><option value="pend">Más pendientes primero</option><option value="nombre">Nombre (A-Z)</option><option value="orig">Orden del archivo</option></select></label>
+      <label><input type="checkbox" id="fOcultar"> Ocultar los listos</label>
+      <span id="fCnt" style="width:100%"></span>
+    </div>
+    <div class="sc" id="als"></div></section>
 </main>
 <div class="bot">
   <section class="pn"><h2>Comentarios · <span id="quien">Selecciona un alumno</span></h2>
@@ -195,9 +205,31 @@ function renderMaterias(){
     return '<div class="'+cls+'" data-nrc="'+m.nrc+'"><b>'+esc(m.nombre)+'</b><span class="n">'+m.nrc+'</span><small>'+esc(m.horario)+'</small>'+tag+'</div>';
   }).join(''):'<p class="mut">Carga un documento de materias, o un data.json que las incluya.</p>';
 }
+let fPerfil = '', fOrden = 'pend', fOcultar = false;
+const perfilDe = a => a.perfil || 'Alumno';
+const pendientes = a => reportes.filter(r => String(r.ci) === a.ci)
+  .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
+$('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
+$('fOrden').onchange = e => { fOrden = e.target.value; renderAlumnos(); };
+$('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
+
 function renderAlumnos(){
   st.probs = st.probs || {};
-  $('als').innerHTML = alumnos.length ? alumnos.map(a => {
+  // --- mini menú: tipos con su cantidad ---
+  const tipos = ['Alumno', 'Beca trabajo', 'Deportista', 'Ayudante especial'];
+  alumnos.forEach(a => { if (!tipos.includes(perfilDe(a))) tipos.push(perfilDe(a)); });
+  $('fPerfil').innerHTML = '<option value="">Todos los tipos (' + alumnos.length + ')</option>' +
+    tipos.map(t => '<option value="' + esc(t) + '"' + (t === fPerfil ? ' selected' : '') + '>' + esc(t) +
+      ' (' + alumnos.filter(a => perfilDe(a) === t).length + ')</option>').join('');
+  // --- filtrar y ordenar: con quién concentrarse primero ---
+  const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
+  const nom = a => String(a.nombre || '');
+  if (fOrden === 'pend') lista.sort((a, b) => pendientes(b) - pendientes(a) || nom(a).localeCompare(nom(b)));
+  else if (fOrden === 'nombre') lista.sort((a, b) => nom(a).localeCompare(nom(b)));
+  $('fCnt').textContent = alumnos.length
+    ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientes(a), 0) + ' problema(s) pendiente(s)'
+    : '';
+  $('als').innerHTML = lista.length ? lista.map(a => {
     const rs = reportes.filter(r => String(r.ci) === a.ci), op = abiertos.has(a.ci), s = st[a.ci];
     let det = '';
     if (op) {
@@ -224,7 +256,8 @@ function renderAlumnos(){
     return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
       '<div class="who"><b>' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
       (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + badgeProbs + '</div>' + det + '</div>';
-  }).join('') : '<p class="mut">Carga el data.json para ver a los alumnos.</p>';
+  }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
+                                : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
 }
 function renderHorario(){
   const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
