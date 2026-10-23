@@ -45,6 +45,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 300px;gap:
 .blk:hover{outline:2px solid var(--bad)}.blk span{display:block;font-size:11px;opacity:.8}
 .c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
 .bot{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px;height:210px}
+.bot.min{height:36px!important;overflow:hidden}.bot.min .in{display:none!important}
 .bot .in{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
 textarea{flex:1;resize:none;border:1px solid var(--bd);border-radius:8px;padding:8px;font:inherit;background:var(--bg);color:var(--tx)}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
@@ -85,11 +86,15 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
   <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
   <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
     <p class="mut">La primera fila son los encabezados (no importan mayúsculas ni tildes). Se aceptan .xlsx (primera hoja), .csv y .json.</p>
+    <p><b>Formato de entrega:</b> <code>Codigo;Nro_Curso;Materia;Prelaciones;Horario</code> (separado por punto y coma).<br>Ejemplo: <code>MAT-101;10234;Cálculo I;MAT-100;Lunes y Miércoles 07:00-09:00</code></p>
     <table><tr><th>Columna</th><th>Encabezados que se reconocen</th><th>Uso</th></tr>
-      <tr><td>Código</td><td>Codigo, Cod, ID, Clave, NRC, Sigla</td><td>Criterio principal de comparación (opcional)</td></tr>
-      <tr><td>Materia</td><td>Materia, Nombre, Asignatura, Curso</td><td>Respaldo cuando no hay código</td></tr>
-      <tr><td>Otras</td><td>Carrera, Seccion, Horario, Profesor…</td><td>Se conservan y se muestran como detalles</td></tr></table>
-    <p class="mut">La malla debe tener al menos Código o Materia. Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
+      <tr><td>Codigo</td><td>Codigo, Cod, ID, Clave, Sigla</td><td>Criterio principal para comparar con la malla</td></tr>
+      <tr><td>Nro_Curso</td><td>Nro_Curso, Nro de Curso, Numero de Curso</td><td>Número del curso (NRC): identifica cada sección en el gestor</td></tr>
+      <tr><td>Materia</td><td>Materia, Nombre, Asignatura</td><td>Respaldo cuando no hay código</td></tr>
+      <tr><td>Prelaciones</td><td>Prelaciones, Prerrequisitos</td><td>Materias previas (informativo; se muestra en el gestor)</td></tr>
+      <tr><td>Horario</td><td>Horario, Dias y Horas</td><td>Texto como «Lunes y Miércoles 07:00-09:00»; el gestor lo necesita para armar el horario</td></tr>
+    </table>
+    <p class="mut">La malla debe tener al menos Codigo o Materia. Cualquier otra columna se conserva en «Otros datos». Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
     <button class="s" id="bPlant">Descargar plantilla CSV</button></details></section>
   <section class="card">
     <h2>1 · Malla curricular principal</h2>
@@ -123,6 +128,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
 <div id="fase2" hidden>
 <header>
   <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
+  <button class="b s" id="btnResetSt" style="font-size:12px;padding:4px 8px" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
 </header>
 <main>
@@ -136,8 +142,8 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
     </div>
     <div class="sc" id="als"></div></section>
 </main>
-<div class="bot">
-  <section class="pn"><h2>Comentarios · <span id="quien">Selecciona un alumno</span></h2>
+<div class="bot" id="botPanel">
+  <section class="pn"><h2 style="display:flex;justify-content:space-between;align-items:center"><span>Comentarios · <span id="quien">Selecciona un alumno</span></span><button class="b s" id="btnMinBot" style="padding:2px 8px;font-size:11px;cursor:pointer">─ Minimizar</button></h2>
     <div class="in">
       <textarea id="nota" placeholder="Resolución del problema del alumno…"></textarea>
       <div class="btns"><button class="b" id="btnListo">Marcar alumno como listo</button></div>
@@ -184,6 +190,8 @@ function jrows(j){
   return[];
 }
 const KC=['CODIGO','COD','ID','CLAVE','NRC','SIGLA'],KN=['NOMBRE','MATERIA','ASIGNATURA','CURSO','NAME'];
+/* formato de entrega: Codigo;Nro_Curso;Materia;Prelaciones;Horario */
+const KNRO=['NRO CURSO','NRO DE CURSO','NUMERO CURSO','NUMERO DE CURSO','NRO'],KPRE=['PRELACIONES','PRELACION','PRERREQUISITOS','PRERREQUISITO'],KHOR=['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'];
 function columna(keys,L,excluir){
   const ok=k=>!(excluir&&/PROFESOR|DOCENTE|ALUMNO|ESTUDIANTE/.test(nz(k)));
   return keys.find(k=>ok(k)&&L.includes(nz(k)))||keys.find(k=>ok(k)&&L.some(x=>nz(k).startsWith(x+' ')))||null;
@@ -197,13 +205,13 @@ async function parsear(nombre,dato){
   else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrows(JSON.parse(dato.replace(/^\uFEFF/,'')));
   else rows=csv(dato);
   if(!rows.length)throw new Error('no se encontraron filas');
-  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true);
+  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false);
   if(!c&&!n)throw new Error('no hay columna de código ni de nombre de materia');
   const items=rows.map(r=>{
-    const extra=Object.entries(r).filter(([k,v])=>k!==c&&k!==n&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
-    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',extra,row:r};
+    const extra=Object.entries(r).filter(([k,v])=>![c,n,nr,pr,ho].includes(k)&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
+    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',nro:nr?r[nr]:'',pre:pr?r[pr]:'',hor:ho?r[ho]:'',extra,row:r};
   }).filter(it=>it.code||it.name);
-  return{items,c,n};
+  return{items,c,n,ho:!!ho};
 }
 
 /* ---------- lector .xlsx sin librerías ---------- */
@@ -252,7 +260,7 @@ async function ingest(tipo,nombre,dato){
     }
   }else{
     archivos=archivos.filter(a=>a.nombre!==nombre);
-    archivos.push({nombre,items:p?p.items:[],error});
+    archivos.push({nombre,items:p?p.items:[],error,ho:p?p.ho:false});
   }
   renderFiltro();
 }
@@ -270,7 +278,7 @@ $('verNo').onchange=renderFiltro;
 function evaluar(it){
   if(it.code){
     if(malla.byCode.has(it.code))return[malla.byCode.get(it.code),'código'];
-    const e=malla.byName.get(it.name);                 // el código no coincide: solo vale si la malla no trae código para esa materia
+    const e=malla.byName.get(it.name);
     return e&&!e.code?[e,'nombre']:null;
   }
   const e=malla.byName.get(it.name);
@@ -293,14 +301,14 @@ function renderFiltro(){
   $('lista').innerHTML=archivos.length?archivos.map(a=>{
     const f=porArchivo.find(x=>x[0]===a);
     return '<li><b>'+esc(a.nombre)+'</b>'+(a.error?' <span class="err">— '+esc(a.error)+'</span>':
-      ' <span class="pill">'+a.items.length+' filas</span>'+(f?'<span class="pill ok">'+f[1]+' en la malla</span><span class="pill bad">'+f[2]+' descartadas</span>':''))+'</li>';
+      ' <span class="pill">'+a.items.length+' filas</span>'+(a.ho?'':'<span class="pill bad">sin columna Horario</span>')+(f?'<span class="pill ok">'+f[1]+' en la malla</span><span class="pill bad">'+f[2]+' descartadas</span>':''))+'</li>';
   }).join(''):'<li class="mut">Sin archivos cargados.</li>';
 
   $('cnt').textContent=ok.length;$('bExp').disabled=$('bCsv').disabled=$('bGo').disabled=!ok.length;$('goInfo').textContent=ok.length?ok.length+' materia(s) pasarán al gestor de horarios.':'';
   if(!malla){$('res').innerHTML='<p class="mut">Primero carga la malla curricular principal.</p>';$('faltan').textContent='—';return}
   const ver=$('verNo').checked,filas=ok.map(x=>({...x,s:1})).concat(ver?no.map(x=>({...x,s:0})):[]);
-  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Código</th><th>Materia</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Detalles</th></tr>'+
-    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.rawName)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada')+'</td>':'')+
+  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Codigo</th><th>Nro_Curso</th><th>Materia</th><th>Prelaciones</th><th>Horario</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Otros datos</th></tr>'+
+    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada')+'</td>':'')+
       '<td>'+(x.s?esc(x.por):'—')+'</td><td>'+esc(x.it.extra)+'</td></tr>').join('')+'</table>'
     :'<p class="mut">'+(archivos.length?'Ninguna materia de los archivos pertenece a la malla.':'Carga al menos un archivo de materias.')+'</p>';
   const falt=malla.entries.filter(e=>!cubiertas.has(e));
@@ -341,13 +349,13 @@ function xlsx(filas){
 function descargar(blob,nombre){
   const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
 }
-const filasExport=()=>[['Archivo','Codigo','Materia','Coincidio por','Detalles']].concat(aceptadas.map(x=>[x.a,x.it.rawCode,x.it.rawName,x.por,x.it.extra]));
+const filasExport=()=>[['Codigo','Nro_Curso','Materia','Prelaciones','Horario','Archivo','Coincidio por','Otros datos']].concat(aceptadas.map(x=>[x.it.rawCode,x.it.nro,x.it.rawName,x.it.pre,x.it.hor,x.a,x.por,x.it.extra]));
 $('bExp').onclick=()=>{try{descargar(xlsx(filasExport()),'materias_en_malla.xlsx')}catch(e){alert('No se pudo generar el Excel: '+e.message)}};
 $('bCsv').onclick=()=>{
   const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
   descargar(new Blob(['\uFEFFsep=;\r\n'+filasExport().map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'materias_en_malla.csv');
 };
-$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Materia;Carrera;Seccion\r\nMAT-101;Calculo I;Ingenieria;A\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
+$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Materia;Prelaciones;Horario\r\nMAT-101;10234;Calculo I;MAT-100;Lunes y Miercoles 07:00-09:00\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
 
 
 const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
@@ -358,7 +366,22 @@ const abiertos=new Set();
 try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
 const guardar=()=>{try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
 const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
-const byNrc=n=>materias.find(m=>m.nrc===n);
+
+/* Normalización estricta de códigos y NRCs */
+const normCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const byNrc = n => {
+  if (n == null || n === '') return null;
+  const k = normCode(n);
+  if (!k) return null;
+  return materias.find(m => normCode(m.nrc) === k || normCode(m.cod) === k || normCode(m.nro) === k);
+};
+const colorIdx = s => {
+  const str = String(s || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+  return Math.abs(hash) % 6;
+};
+
 const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
 
 function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
@@ -371,52 +394,79 @@ function slots(h){const out=[];
     for(const d of norm(seg).match(/lunes|martes|miercoles|jueves|viernes|sabado|domingo/g)||[])out.push({d:DIAS[d],s,e});
   }return out}
 const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
-const conflictosCon=m=>get().n.filter(n=>n!==m.nrc).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
+const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)&&normCode(n)!==normCode(m.cod)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
 
 /* ---------- carga de archivos ---------- */
-const normM=a=>(a||[]).map(m=>({nrc:Number(m.nrc),nombre:m.nombre||m.materia||'',horario:m.horario||'',profesor:m.profesor||'',sl:slots(m.horario)})).filter(m=>m.nrc);
-function csvM(t){
-  const L=t.replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()),sep=L[0].includes(';')?';':',';
-  const H=L[0].split(sep).map(x=>norm(x.trim())),ix=k=>H.findIndex(h=>h.startsWith(k));
-  return normM(L.slice(1).map(l=>{const c=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
-    return{nrc:c[ix('nrc')],nombre:c[ix('nombre')],horario:c[ix('horario')],profesor:ix('profesor')<0?'':c[ix('profesor')]}}));
-}
+const normM=a=>(a||[]).map(m=>{
+  const rawNrc = m.nrc != null ? String(m.nrc).trim() : (m.codigo || m.cod || m.Nro_Curso || m.nro || '').trim();
+  const nombre = m.nombre || m.materia || m.rawName || '';
+  const horario = m.horario || m.hor || '';
+  const profesor = m.profesor || '';
+  const det = m.det || [m.nro && 'Curso '+m.nro, m.pre && 'Prelaciones: '+m.pre].filter(Boolean).join(' · ');
+  return {
+    nrc: rawNrc,
+    cod: String(m.cod || rawNrc).trim(),
+    nro: String(m.nro || rawNrc).trim(),
+    nombre,
+    horario,
+    profesor,
+    det,
+    sl: m.sl || slots(horario)
+  };
+}).filter(m => m.nrc && m.nombre);
+
 function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
   r.readAsText(f,'utf-8')}
 $('fDat').onchange=()=>leer($('fDat'),t=>{datos=JSON.parse(t);aplicar()});
+
+$('btnResetSt').onclick=()=>{
+  if(confirm('¿Deseas restablecer los datos locales? Esto actualizará las materias inscriptas de los alumnos desde data.json.')){
+    localStorage.removeItem('hr_estado');
+    st = {};
+    aplicar();
+    aviso('Memoria local restablecida.');
+  }
+};
+
 function aplicar(){
   materias=matsArchivo||(datos?normM(datos.materias):[]);
   alumnos=datos?(datos.estudiantes||[]).map(a=>{
-    // Carga las 4 materias predeterminadas si el alumno no tiene horario en localStorage
     if(!st[a.ci] && a.materias_inscriptas){
       st[a.ci] = { n: [...a.materias_inscriptas], nota: '', listo: false };
     }
     return Object.assign({},a,{ci:String(a.ci)});
   }):[];
-  reportes=datos?(datos.reportes||[]):[];
+  reportes=datos?(datos.reportes||[]).map(r=>Object.assign({},r,{nrc:String(r.nrc)})):[];
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
   $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
   guardar();
   renderTodo();
   if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
+  if(datos && (!datos.materias || !datos.materias.length) && !matsArchivo){
+    aviso('El data.json no incluye la lista de materias. Cárgalas en la Fase 1.', true);
+  }
 }
+
 /* ---------- acciones ---------- */
 function toggle(nrc){
   const m=byNrc(nrc),cur=get();if(!m)return;
-  if(cur.n.includes(nrc))cur.n=cur.n.filter(x=>x!==nrc);
-  else{
+  const targetCode = normCode(m.nrc);
+  const idx = cur.n.findIndex(x => normCode(x) === targetCode || normCode(x) === normCode(m.cod));
+  
+  if(idx >= 0){
+    cur.n.splice(idx, 1);
+  }else{
     if(!m.sl.length)return aviso('No se reconoce el horario de «'+m.nombre+'».',true);
     const c=conflictosCon(m);
     if(c.length)return aviso('«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.',true);
-    cur.n.push(nrc);
+    cur.n.push(m.nrc);
   }
   guardar();renderMaterias();renderHorario();
 }
-$('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(Number(d.dataset.nrc))};
-$('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(Number(d.dataset.q))};
+$('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(d.dataset.nrc)};
+$('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(d.dataset.q)};
 $('als').onclick = e => {
-  // Maneja el clic sobre el checkbox del problema
   const chk = e.target.closest('.chk-prob');
   if (chk) {
     st.probs = st.probs || {};
@@ -426,7 +476,6 @@ $('als').onclick = e => {
     return;
   }
   
-  // Maneja la selección del alumno y despliegue de detalles
   const d = e.target.closest('.al');
   if (!d) return;
   const ci = d.dataset.ci;
@@ -452,13 +501,33 @@ $('btnExp').onclick=()=>{
 
 /* ---------- render ---------- */
 function renderMaterias(){
-  const cur=get(),rep=new Set(reportes.filter(r=>sel&&String(r.ci)===sel).map(r=>Number(r.nrc)));
-  $('mats').innerHTML=materias.length?materias.map(m=>{
+  const cur=get(), rep=new Set(reportes.filter(r=>sel&&String(r.ci)===sel).map(r=>normCode(r.nrc)));
+
+  // Determina la prioridad de ordenamiento de cada materia
+  const getPrio = m => {
+    const inc = cur.n.includes(m.nrc);
+    const isRep = rep.has(normCode(m.nrc)) || rep.has(normCode(m.cod));
+    const choca = conflictosCon(m).length > 0;
+    
+    if (inc) return 1;      // 1. Incluidas (En horario ✓)
+    if (isRep) return 2;    // 2. Reportadas / Afectadas (⚠ reportada)
+    if (choca) return 3;    // 3. Choque de horario (Choca con...)
+    return 4;               // 4. El resto (disponibles)
+  };
+
+  // Se realiza una copia y se ordena según prioridad y luego por nombre
+  const materiasOrdenadas = [...materias].sort((a, b) => {
+    const pa = getPrio(a), pb = getPrio(b);
+    if (pa !== pb) return pa - pb;
+    return String(a.nombre || '').localeCompare(String(b.nombre || ''));
+  });
+
+  $('mats').innerHTML=materiasOrdenadas.length?materiasOrdenadas.map(m=>{
     let cls='mat',tag='';
     if(cur.n.includes(m.nrc)){cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
     else if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
     else{const c=conflictosCon(m);if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}}
-    if(rep.has(m.nrc))tag+='<em class="t warn">⚠ reportada</em>';
+    if(rep.has(normCode(m.nrc))||rep.has(normCode(m.cod)))tag+='<em class="t warn">⚠ reportada</em>';
     return '<div class="'+cls+'" data-nrc="'+m.nrc+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>';
   }).join(''):'<p class="mut">No hay materias: vuelve al filtro, o carga un data.json que las incluya.</p>';
 }
@@ -471,13 +540,12 @@ $('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
 
 function renderAlumnos(){
   st.probs = st.probs || {};
-  // --- mini menú: tipos con su cantidad ---
   const tipos = ['Alumno', 'Beca trabajo', 'Deportista', 'Ayudante especial'];
   alumnos.forEach(a => { if (!tipos.includes(perfilDe(a))) tipos.push(perfilDe(a)); });
   $('fPerfil').innerHTML = '<option value="">Todos los tipos (' + alumnos.length + ')</option>' +
     tipos.map(t => '<option value="' + esc(t) + '"' + (t === fPerfil ? ' selected' : '') + '>' + esc(t) +
       ' (' + alumnos.filter(a => perfilDe(a) === t).length + ')</option>').join('');
-  // --- filtrar y ordenar: con quién concentrarse primero ---
+
   const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
   const nom = a => String(a.nombre || '');
   if (fOrden === 'pend') lista.sort((a, b) => pendientes(b) - pendientes(a) || nom(a).localeCompare(nom(b)));
@@ -490,7 +558,7 @@ function renderAlumnos(){
     let det = '';
     if (op) {
       det = '<div class="rep">' + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
-        const m = byNrc(Number(r.nrc));
+        const m = byNrc(r.nrc);
         const key = a.ci + '_' + r.nrc + '_' + i;
         const ok = !!st.probs[key];
         return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
@@ -503,7 +571,6 @@ function renderAlumnos(){
       : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
     }
     
-    // Contamos cuántos problemas han sido marcados como resueltos
     const resueltos = rs.filter((r, i) => st.probs[a.ci + '_' + r.nrc + '_' + i]).length;
     const badgeProbs = rs.length 
       ? '<span class="bdg ' + (resueltos === rs.length ? 'ok' : '') + '" title="Problemas resueltos">' + resueltos + '/' + rs.length + '</span>'
@@ -515,16 +582,33 @@ function renderAlumnos(){
   }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
                                 : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
 }
+
 function renderHorario(){
-  const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
-  if(all.length){h0=Math.floor(Math.min(...all.map(x=>x.s)));h1=Math.ceil(Math.max(...all.map(x=>x.e)));if(all.some(x=>x.d===6))nd=7}
-  const H=40,alto=(h1-h0)*H,cur=get();
+  const all=materias.flatMap(m=>m.sl);
+  let h0=7, h1=19, nd=6;
+  if(all.length){
+    h0=Math.min(7, Math.floor(Math.min(...all.map(x=>x.s))));
+    h1=Math.max(19, Math.ceil(Math.max(...all.map(x=>x.e))));
+    if(all.some(x=>x.d===6))nd=7;
+  }
+  
+  // Calcula la altura de cada bloque de hora (H) dinámicamente
+  const cont = $('hor');
+  const availH = (cont ? cont.clientHeight : 500) - 32;
+  const hoursCount = h1 - h0;
+  const H = Math.max(40, Math.floor(availH / hoursCount));
+  const alto = hoursCount * H, cur = get();
+
   let h='<div class="grid" style="grid-template-columns:46px repeat('+nd+',1fr)"><div class="dh"></div>'+DN.slice(0,nd).map(d=>'<div class="dh">'+d+'</div>').join('');
-  h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:h1-h0},(_,i)=>'<div style="height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
+  h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:hoursCount},(_,i)=>'<div style="height:'+H+'px;line-height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
   for(let d=0;d<nd;d++){
     h+='<div class="col" style="height:'+alto+'px;background-size:100% '+H+'px">';
     for(const n of cur.n){const m=byNrc(n);if(!m)continue;
-      m.sl.filter(x=>x.d===d).forEach(x=>{h+='<div class="blk c'+(n%6)+'" data-q="'+n+'" title="Clic para quitar" style="top:'+(x.s-h0)*H+'px;height:'+(x.e-x.s)*H+'px"><b>'+esc(m.nombre)+'</b><span>'+fmt(x.s)+'–'+fmt(x.e)+'</span></div>'})}
+      const colIdx = Math.abs(String(n).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 6;
+      m.sl.filter(x=>x.d===d).forEach(x=>{
+        h+='<div class="blk c'+colIdx+'" data-q="'+esc(n)+'" title="Clic para quitar" style="top:'+(x.s-h0)*H+'px;height:'+(x.e-x.s)*H+'px"><b>'+esc(m.nombre)+'</b><span>'+fmt(x.s)+'–'+fmt(x.e)+'</span></div>';
+      });
+    }
     h+='</div>';
   }
   $('hor').innerHTML=h+'</div>';
@@ -543,17 +627,22 @@ function renderBottom(){
 function renderTodo(){renderMaterias();renderAlumnos();renderHorario();renderBottom()}
 renderTodo();
 
-
 /* ---------- puente: materias filtradas -> gestor ---------- */
 function materiasFiltradas(){
-  const usados=new Set(),out=[];let libre=900001;
+  const out=[];let libre=900001;
   for(const x of aceptadas){
-    const r=x.it.row,ks=Object.keys(r),val=(L,ex)=>{const k=columna(ks,L,ex);return k?String(r[k]||'').trim():''};
-    const cod=String(x.it.rawCode||'').trim(),num=/^\d+$/.test(cod)?Number(cod):0,id=num&&!usados.has(num)?num:libre++;
-    usados.add(id);
-    const hor=val(['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'],true);
-    out.push({nrc:id,cod,nombre:x.it.rawName||cod,horario:hor,profesor:val(['PROFESOR','DOCENTE'],false),
-      det:[val(['CARRERA','PROGRAMA'],true),val(['SECCION','GRUPO'],true)].filter(Boolean).join(' · '),sl:slots(hor)});
+    const it=x.it, cod=String(it.rawCode||'').trim(), nro=String(it.nro||'').trim(), hor=String(it.hor||'').trim();
+    const base = cod || nro || String(libre++);
+    out.push({
+      nrc: base,
+      cod: cod || nro || base,
+      nro: nro,
+      nombre: it.rawName || cod || ('Materia ' + base),
+      horario: hor,
+      profesor: '',
+      det: [nro && 'Curso ' + nro, it.pre && 'Prelaciones: ' + it.pre].filter(Boolean).join(' · '),
+      sl: slots(hor)
+    });
   }
   return out;
 }
@@ -566,6 +655,14 @@ $('bGo').onclick=()=>{matsArchivo=materiasFiltradas();fase(2)};
 $('bSkip').onclick=()=>{matsArchivo=null;fase(2)};
 $('volver').onclick=()=>fase(1);
 renderFiltro();fase(1);
+$('btnMinBot').onclick=()=>{
+  const b=$('botPanel');
+  const min=b.classList.toggle('min');
+  $('btnMinBot').textContent=min?'▲ Mostrar panel':'─ Minimizar';
+  setTimeout(renderHorario, 50); // Recalcula la altura del horario al minimizar/expandir
+};
+// También recalcula el horario si la ventana cambia de tamaño
+window.addEventListener('resize', renderHorario);
 </script>
 </body>
 </html>
