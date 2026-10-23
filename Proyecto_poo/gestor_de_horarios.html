@@ -58,6 +58,9 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
 @media(max-width:1000px){body{height:auto}main{grid-template-columns:1fr}.pn{max-height:60vh}.bot{grid-template-columns:1fr;height:auto}.bot .pn{min-height:220px}}
 
 [hidden]{display:none!important}
+.acc{font-size:12px}.acc[open]{background:var(--pn);border:1px solid var(--bd);padding:6px 10px;border-radius:8px;position:absolute;z-index:8}.acc label{display:block;padding:2px 0}
+body.big{font-size:17px}
+@media print{.top,header,main>section:not(:nth-child(2)),.bot,#aviso{display:none!important}main{display:block}body{height:auto}.pn{border:0}}
 .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
 .top h1{font-size:16px;margin:0 8px 0 0}
 .step{font-size:13px;color:var(--mut);padding:3px 10px;border-radius:99px}.step.on{background:var(--acs);color:var(--ac);font-weight:600}
@@ -130,9 +133,14 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
   <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
   <button class="b s" id="btnResetSt" style="font-size:12px;padding:4px 8px" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
+  <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Permitir deshacer (botón y Ctrl+Z)</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
+  <button class="b s" id="btnUndo" hidden style="padding:4px 8px;font-size:12px">↶ Deshacer</button>
+  <button class="b s" id="btnPrint" style="padding:4px 8px;font-size:12px">Imprimir horario</button>
+  <button class="b s" id="btnResp" style="padding:4px 8px;font-size:12px">Respaldo ⬇</button>
+  <button class="b s" id="btnRest" style="padding:4px 8px;font-size:12px">Restaurar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
 </header>
 <main>
-  <section class="pn"><h2>Materias</h2><div class="sc" id="mats"></div></section>
+  <section class="pn"><h2>Materias</h2><div class="flt"><input id="qMat" placeholder="Buscar: nombre, código, día…" style="flex:1;font:inherit;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)"></div><div class="sc" id="mats"></div></section>
   <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
   <section class="pn"><h2>Alumnos</h2>
     <div class="flt">
@@ -292,7 +300,7 @@ function renderFiltro(){
       let y=0,n=0;
       for(const it of a.items){
         const m=evaluar(it);
-        if(m){y++;cubiertas.add(m[0]);ok.push({a:a.nombre,it,por:m[1]})}else{n++;no.push({a:a.nombre,it})}
+        if(m){y++;cubiertas.add(m[0]);if(m[0].code)malla.entries.forEach(e=>{if(e.code===m[0].code)cubiertas.add(e)});ok.push({a:a.nombre,it,por:m[1]})}else{n++;no.push({a:a.nombre,it})}
       }
       porArchivo.push([a,y,n]);
     }
@@ -308,7 +316,7 @@ function renderFiltro(){
   if(!malla){$('res').innerHTML='<p class="mut">Primero carga la malla curricular principal.</p>';$('faltan').textContent='—';return}
   const ver=$('verNo').checked,filas=ok.map(x=>({...x,s:1})).concat(ver?no.map(x=>({...x,s:0})):[]);
   $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Codigo</th><th>Nro_Curso</th><th>Materia</th><th>Prelaciones</th><th>Horario</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Otros datos</th></tr>'+
-    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada')+'</td>':'')+
+    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada'+(malla.byName.has(x.it.name)?' · ⚠ el nombre coincide con la malla (revisar código)':''))+'</td>':'')+
       '<td>'+(x.s?esc(x.por):'—')+'</td><td>'+esc(x.it.extra)+'</td></tr>').join('')+'</table>'
     :'<p class="mut">'+(archivos.length?'Ninguna materia de los archivos pertenece a la malla.':'Carga al menos un archivo de materias.')+'</p>';
   const falt=malla.entries.filter(e=>!cubiertas.has(e));
@@ -352,7 +360,7 @@ function descargar(blob,nombre){
 const filasExport=()=>[['Codigo','Nro_Curso','Materia','Prelaciones','Horario','Archivo','Coincidio por','Otros datos']].concat(aceptadas.map(x=>[x.it.rawCode,x.it.nro,x.it.rawName,x.it.pre,x.it.hor,x.a,x.por,x.it.extra]));
 $('bExp').onclick=()=>{try{descargar(xlsx(filasExport()),'materias_en_malla.xlsx')}catch(e){alert('No se pudo generar el Excel: '+e.message)}};
 $('bCsv').onclick=()=>{
-  const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/^([=+\-@])/,"'$1")+'"';
   descargar(new Blob(['\uFEFFsep=;\r\n'+filasExport().map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'materias_en_malla.csv');
 };
 $('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Materia;Prelaciones;Horario\r\nMAT-101;10234;Calculo I;MAT-100;Lunes y Miercoles 07:00-09:00\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
@@ -368,13 +376,9 @@ const guardar=()=>{try{localStorage.setItem('hr_estado',JSON.stringify(st))}catc
 const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
 
 /* Normalización estricta de códigos y NRCs */
-const normCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-const byNrc = n => {
-  if (n == null || n === '') return null;
-  const k = normCode(n);
-  if (!k) return null;
-  return materias.find(m => normCode(m.nrc) === k || normCode(m.cod) === k || normCode(m.nro) === k);
-};
+const normCode = nc;
+let idx1=new Map(),idx2=new Map(),repBy=new Map();
+const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):null};
 const colorIdx = s => {
   const str = String(s || '');
   let hash = 0;
@@ -387,18 +391,24 @@ const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
 function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
 
 /* ---------- horarios: "Lunes y Miércoles 07:00-09:00" -> [{d,s,e}] ---------- */
-function slots(h){const out=[];
-  for(const seg of String(h||'').split(/[;\/\n]/)){
-    const t=seg.match(/(\d{1,2}):(\d{2})\s*(?:-|–|a)\s*(\d{1,2}):(\d{2})/);if(!t)continue;
-    const s=+t[1]+t[2]/60,e=+t[3]+t[4]/60;
-    for(const d of norm(seg).match(/lunes|martes|miercoles|jueves|viernes|sabado|domingo/g)||[])out.push({d:DIAS[d],s,e});
-  }return out}
+function slots(h){
+  const t=norm(h).replace(/[–—]/g,'-'),out=[],D=['lun','mar','mie','jue','vie','sab','dom'];
+  const re=/(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?\s*(?:-|a)\s*(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?/g;
+  const hh=(x,mi,ap)=>{x=+x;if(ap==='pm'&&x<12)x+=12;if(ap==='am'&&x===12)x=0;return x+mi/60};
+  let m,last=0;
+  while((m=re.exec(t))){
+    const seg=t.slice(last,m.index);last=re.lastIndex;
+    const e=hh(m[4],+m[5],m[6]);let st0=hh(m[1],+m[2],m[3]||m[6]);if(st0>=e)st0=hh(m[1],+m[2],m[3]);
+    const dr=/(lun|mar|mie|jue|vie|sab|dom)[a-z]*(?:\s*(?:a|al|-)\s*(lun|mar|mie|jue|vie|sab|dom)[a-z]*)?/g;let d;
+    while((d=dr.exec(seg))){const i=D.indexOf(d[1]),j=d[2]?D.indexOf(d[2]):i;for(let k=i;k<=j;k++)out.push({d:k,s:st0,e})}
+  }
+  return out}
 const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
 const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)&&normCode(n)!==normCode(m.cod)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
 
 /* ---------- carga de archivos ---------- */
 const normM=a=>(a||[]).map(m=>{
-  const rawNrc = m.nrc != null ? String(m.nrc).trim() : (m.codigo || m.cod || m.Nro_Curso || m.nro || '').trim();
+  const rawNrc = m.nrc != null ? String(m.nrc).trim() : String(m.codigo || m.cod || m.Nro_Curso || m.nro || '').trim();
   const nombre = m.nombre || m.materia || m.rawName || '';
   const horario = m.horario || m.hor || '';
   const profesor = m.profesor || '';
@@ -411,17 +421,18 @@ const normM=a=>(a||[]).map(m=>{
     horario,
     profesor,
     det,
-    sl: m.sl || slots(horario)
+    pre:String(m.pre||m.prelaciones||''),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
   };
 }).filter(m => m.nrc && m.nombre);
 
 function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
   r.readAsText(f,'utf-8')}
-$('fDat').onchange=()=>leer($('fDat'),t=>{datos=JSON.parse(t);aplicar()});
+const hash=t=>{let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return String(h)};
+$('fDat').onchange=()=>{leer($('fDat'),t=>{datos=JSON.parse(t);datos._sig=hash(t);aplicar()});$('fDat').value=''};
 
 $('btnResetSt').onclick=()=>{
-  if(confirm('¿Deseas restablecer los datos locales? Esto actualizará las materias inscriptas de los alumnos desde data.json.')){
+  if(confirm('¿Restablecer los datos locales? Se perderán los cambios de horario, las notas, los «listo» y los checks de problemas (usa «Respaldo» antes si quieres conservarlos).')){
     localStorage.removeItem('hr_estado');
     st = {};
     aplicar();
@@ -430,39 +441,59 @@ $('btnResetSt').onclick=()=>{
 };
 
 function aplicar(){
+  if(datos){const sg=datos._sig||'';if(st.sig&&sg&&st.sig!==sg){st={};aviso('Data.json distinto al de la sesión anterior: se reinició el estado local.',true)}if(sg)st.sig=sg}
   materias=matsArchivo||(datos?normM(datos.materias):[]);
+  if((!materias||!materias.length)&&malla){
+    materias=malla.entries.map(e=>({nrc:e.rawCode||e.code,cod:e.rawCode||e.code,nro:e.nro,nombre:e.rawName||e.name,horario:e.hor,profesor:'',det:[e.nro&&'Curso '+e.nro,e.pre&&'Prelaciones: '+e.pre].filter(Boolean).join(' · '),sl:slots(e.hor)}));
+  }
   alumnos=datos?(datos.estudiantes||[]).map(a=>{
-    if(!st[a.ci] && a.materias_inscriptas){
-      st[a.ci] = { n: [...a.materias_inscriptas], nota: '', listo: false };
-    }
-    return Object.assign({},a,{ci:String(a.ci)});
+    const ci=String(a.ci),inscritos=a.materias_inscriptas||[];
+    // Sincroniza las materias inscritas directamente desde el data.json recién cargado
+    const pv=st[ci]||{};st[ci]={n:pv.ed?pv.n:[...inscritos],ini:[...inscritos],ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo};
+    return Object.assign({},a,{ci});
   }):[];
-  reportes=datos?(datos.reportes||[]).map(r=>Object.assign({},r,{nrc:String(r.nrc)})):[];
+  reportes=datos?(datos.reportes||[]):[];
+  repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
+  idx1=new Map();idx2=new Map();
+  materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
+  materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
   $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
   guardar();
   renderTodo();
   if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
-  if(datos && (!datos.materias || !datos.materias.length) && !matsArchivo){
-    aviso('El data.json no incluye la lista de materias. Cárgalas en la Fase 1.', true);
-  }
 }
 
 /* ---------- acciones ---------- */
+const ajustes=(()=>{try{return JSON.parse(localStorage.getItem('hr_ajustes')||'{}')}catch(e){return{}}})();
+const undoSt=[];
+function snap(){undoSt.push({k:sel||'_libre',n:[...get().n]});if(undoSt.length>50)undoSt.shift()}
+function deshacer(){const u=undoSt.pop();if(!u)return aviso('Nada que deshacer.',true);
+  st[u.k]=st[u.k]||{n:[],nota:'',listo:false};st[u.k].n=u.n;st[u.k].ed=true;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
+function validar(m,cur){
+  if(!m.sl.length)return 'No se reconoce el horario de «'+m.nombre+'».';
+  const dup=cur.n.map(byNrc).find(o=>o&&o!==m&&normCode(o.nrc)!==normCode(m.nrc)&&(normCode(o.cod)===normCode(m.cod)||nz(o.nombre)===nz(m.nombre)));
+  if(dup)return '«'+m.nombre+'» ya está inscrita en otra sección ('+dup.nrc+').';
+  const c=conflictosCon(m);if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
+  const a=alumnos.find(x=>x.ci===sel);
+  if(a){
+    if(Array.isArray(a.aprobadas)&&m.pre){const ap=new Set(a.aprobadas.map(normCode)),f=m.pre.split(/[,;\/]|\sy\s/).map(normCode).filter(Boolean).filter(p=>!ap.has(p));if(f.length)return 'Faltan prelaciones: '+f.join(', ')+'.'}
+    const mx=+(a.max_creditos||a.max_uc||0);
+    if(mx&&m.cred){const t=cur.n.map(byNrc).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
+  }
+  if(m.cupo){const n=alumnos.filter(x=>x.ci!==sel&&st[x.ci]&&(st[x.ci].n||[]).some(q=>normCode(q)===normCode(m.nrc))).length;if(n>=m.cupo)return 'Sin cupo ('+n+'/'+m.cupo+').'}
+  return ''}
 function toggle(nrc){
   const m=byNrc(nrc),cur=get();if(!m)return;
-  const targetCode = normCode(m.nrc);
-  const idx = cur.n.findIndex(x => normCode(x) === targetCode || normCode(x) === normCode(m.cod));
-  
-  if(idx >= 0){
-    cur.n.splice(idx, 1);
+  const tc=normCode(m.nrc),idx=cur.n.findIndex(x=>normCode(x)===tc||normCode(x)===normCode(m.cod));
+  if(idx>=0){
+    if(ajustes.conf&&!confirm('¿Quitar «'+m.nombre+'» del horario?'))return;
+    snap();cur.n.splice(idx,1);
   }else{
-    if(!m.sl.length)return aviso('No se reconoce el horario de «'+m.nombre+'».',true);
-    const c=conflictosCon(m);
-    if(c.length)return aviso('«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.',true);
-    cur.n.push(m.nrc);
+    const err=validar(m,cur);if(err)return aviso(err,true);
+    snap();cur.n.push(m.nrc);
   }
-  guardar();renderMaterias();renderHorario();
+  cur.ed=true;guardar();renderMaterias();renderHorario();renderAlumnos();
 }
 $('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(d.dataset.nrc)};
 $('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(d.dataset.q)};
@@ -483,17 +514,17 @@ $('als').onclick = e => {
   sel = ci;
   renderTodo();
 };
-$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;guardar();renderPrev()};
+$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;if(c.listo&&!c.nota.trim()){c.listo=false;renderAlumnos();$('btnListo').textContent='Marcar alumno como listo'}guardar();renderPrev()};
 $('btnListo').onclick=()=>{
   const c=get();
   if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
-  c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
+  if(!c.listo){const a=alumnos.find(x=>x.ci===sel);if(a&&pendientesReal(a)>0&&!confirm('Quedan '+pendientesReal(a)+' problema(s) sin marcar como resueltos. ¿Marcar como listo de todos modos?'))return}c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
 };
-const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota}));
+const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota,nrcs:(st[a.ci].n||[]).join(' '),mats:(st[a.ci].n||[]).map(n=>{const m=byNrc(n);return m?m.nombre+' ('+m.horario+')':n}).join(' | ')}));
 $('btnExp').onclick=()=>{
   const L=listos();if(!L.length)return aviso('Marca al menos un alumno como listo.',true);
-  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ')+'"';
-  const csv='\uFEFFsep=;\r\ncedula;resolucion\r\n'+L.map(x=>q(x.ci)+';'+q(x.nota)).join('\r\n');
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ').replace(/^([=+\-@])/,"'$1")+'"';
+  const csv='\uFEFFsep=;\r\ncedula;resolucion;nrc_finales;horario_final\r\n'+L.map(x=>q(x.ci)+';'+q(x.nota)+';'+q(x.nrcs)+';'+q(x.mats)).join('\r\n');
   const u=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
   a.href=u;a.download='resoluciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
   aviso('Exportado: '+L.length+' fila(s) → resoluciones.csv (ábrelo con Excel).');
@@ -501,40 +532,65 @@ $('btnExp').onclick=()=>{
 
 /* ---------- render ---------- */
 function renderMaterias(){
-  const cur=get(), rep=new Set(reportes.filter(r=>sel&&String(r.ci)===sel).map(r=>normCode(r.nrc)));
+  const cur = get();
+  const repsSel = reportes.filter(r => sel && String(r.ci) === sel);
+  const curNorm = new Set(cur.n.map(normCode));
 
-  // Determina la prioridad de ordenamiento de cada materia
-  const getPrio = m => {
-    const inc = cur.n.includes(m.nrc);
-    const isRep = rep.has(normCode(m.nrc)) || rep.has(normCode(m.cod));
-    const choca = conflictosCon(m).length > 0;
-    
-    if (inc) return 1;      // 1. Incluidas (En horario ✓)
-    if (isRep) return 2;    // 2. Reportadas / Afectadas (⚠ reportada)
-    if (choca) return 3;    // 3. Choque de horario (Choca con...)
-    return 4;               // 4. El resto (disponibles)
+  // Coincidencia estricta por NRC o Código completo (evita falsos positivos por número secundario)
+  const isInc = m => cur.n.some(enrolled => {
+    const k = normCode(enrolled);
+    return normCode(m.nrc) === k || normCode(m.cod) === k;
+  });
+  
+  const getRepStatus = m => {
+    if (!sel) return { isRep: false, allow: true };
+    const mCodes = new Set([m.nrc, m.cod].filter(Boolean).map(normCode));
+    const matchedReps = repsSel.filter(r => mCodes.has(normCode(r.nrc)));
+    if (!matchedReps.length) return { isRep: false, allow: true }; // No reportada -> Mostrar
+
+    const isCambioHorario = matchedReps.some(r => {
+      const txt = (String(r.tipo_error || '') + ' ' + String(r.motivo || '')).toLowerCase();
+      return txt.includes('cambio') || txt.includes('cruce') || txt.includes('choque') || txt.includes('horario') || txt.includes('seccion') || txt.includes('sección');
+    });
+
+    return { isRep: true, allow: isCambioHorario };
   };
 
-  // Se realiza una copia y se ordena según prioridad y luego por nombre
-  const materiasOrdenadas = [...materias].sort((a, b) => {
-    const pa = getPrio(a), pb = getPrio(b);
-    if (pa !== pb) return pa - pb;
-    return String(a.nombre || '').localeCompare(String(b.nombre || ''));
-  });
+  const qq=nz($('qMat').value);
+  const materiasVisibles = materias.filter(m => (isInc(m) || getRepStatus(m).allow) && (!qq || nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
+  const prio = new Map(materiasVisibles.map(m => [m, isInc(m) ? 1 : getRepStatus(m).isRep ? 2 : conflictosCon(m).length ? 3 : 4]));
+const materiasOrdenadas = [...materiasVisibles].sort((a, b) => prio.get(a) - prio.get(b) || String(a.nombre || '').localeCompare(String(b.nombre || '')) || String(a.nrc).localeCompare(String(b.nrc)));
+  const grupos = new Map(); materiasOrdenadas.forEach(m => grupos.set(m.nombre, (grupos.get(m.nombre) || 0) + 1)); let prevN = null;
 
-  $('mats').innerHTML=materiasOrdenadas.length?materiasOrdenadas.map(m=>{
-    let cls='mat',tag='';
-    if(cur.n.includes(m.nrc)){cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
-    else if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
-    else{const c=conflictosCon(m);if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}}
-    if(rep.has(normCode(m.nrc))||rep.has(normCode(m.cod)))tag+='<em class="t warn">⚠ reportada</em>';
-    return '<div class="'+cls+'" data-nrc="'+m.nrc+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>';
-  }).join(''):'<p class="mut">No hay materias: vuelve al filtro, o carga un data.json que las incluya.</p>';
+  $('mats').innerHTML = materiasOrdenadas.length ? materiasOrdenadas.map(m => {
+    let cls = 'mat', tag = ''; const gh = (m.nombre !== prevN && grupos.get(m.nombre) > 1) ? '<div class="mut" style="margin:6px 2px 2px;font-size:11px">' + esc(m.nombre) + ' · ' + grupos.get(m.nombre) + ' secciones</div>' : ''; prevN = m.nombre;
+    const inc = isInc(m);
+    const repFlag = getRepStatus(m).isRep;
+    if (inc) { cls += ' on'; tag = '<em class="t ok">En horario ✓</em>'; }
+    else if (!m.sl.length) { cls += ' off'; tag = '<em class="t">Horario no reconocido</em>'; }
+    else {
+      const c = conflictosCon(m);
+      if (c.length) { cls += ' off'; tag = '<em class="t bad">Choca con ' + esc(c.map(x => x.nombre).join(', ')) + '</em>'; }
+    }
+    if (repFlag) tag += '<em class="t warn">⚠ reportada</em>';
+    return gh + '<div class="' + cls + '" data-nrc="' + esc(m.nrc) + '"><b>' + esc(m.nombre) + '</b><span class="n">' + esc(m.cod || m.nrc) + '</span><small>' + esc(m.horario) + '</small>' + (m.det ? '<small>' + esc(m.det) + '</small>' : '') + tag + '</div>';
+  }).join('') : '<p class="mut">No hay materias disponibles para este alumno.</p>';
 }
 let fPerfil = '', fOrden = 'pend', fOcultar = false;
 const perfilDe = a => a.perfil || 'Alumno';
-const pendientes = a => reportes.filter(r => String(r.ci) === a.ci)
+const repsDe = a => repBy.get(a.ci) || [];
+function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],out=[],ms=[];
+  for(const n of c){const m=byNrc(n);if(!m){out.push('NRC '+n+' no está en la oferta cargada');continue}if(!m.sl.length)out.push('Horario no reconocido: '+m.nombre);ms.push(m)}
+  for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
+    if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
+    if(nz(ms[i].nombre)===nz(ms[j].nombre))out.push('Materia duplicada: '+ms[i].nombre)}
+  return out}
+const totalProbs = a => repsDe(a).length;
+const pendientesReal = a => repsDe(a)
   .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
+// Mantiene la prioridad total MIENTRAS exista al menos 1 problema sin resolver.
+// Solo pierde prioridad (pasa a 0) cuando se completan TODOS los checks.
+const pendientesOrden = a  => pendientesReal(a) > 0 ? totalProbs(a) : 0;
 $('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
 $('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
 
@@ -548,24 +604,24 @@ function renderAlumnos(){
 
   const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
   const nom = a => String(a.nombre || '');
-  if (fOrden === 'pend') lista.sort((a, b) => pendientes(b) - pendientes(a) || nom(a).localeCompare(nom(b)));
+  if (fOrden === 'pend') lista.sort((a, b) => pendientesOrden(b) - pendientesOrden(a) || nom(a).localeCompare(nom(b)));
   else if (fOrden === 'nombre') lista.sort((a, b) => nom(a).localeCompare(nom(b)));
   $('fCnt').textContent = alumnos.length
-    ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientes(a), 0) + ' problema(s) pendiente(s)'
-    : '';
+  ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientesReal(a), 0) + ' problema(s) pendiente(s)'
+  : '';
   $('als').innerHTML = lista.length ? lista.map(a => {
-    const rs = reportes.filter(r => String(r.ci) === a.ci), op = abiertos.has(a.ci), s = st[a.ci];
+    const rs = repsDe(a), op = abiertos.has(a.ci), s = st[a.ci]; const al = alertas(a);
     let det = '';
     if (op) {
-      det = '<div class="rep">' + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
+      det = '<div class="rep">' + (al.length ? '<ul>' + al.map(x => '<li class="err">⚠ ' + esc(x) + '</li>').join('') + '</ul>' : '') + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
         const m = byNrc(r.nrc);
         const key = a.ci + '_' + r.nrc + '_' + i;
         const ok = !!st.probs[key];
         return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
-               '<input type="checkbox" class="chk-prob" data-key="' + key + '" ' + (ok ? 'checked' : '') + '> ' +
+               '<input type="checkbox" class="chk-prob" data-key="' + esc(key) + '" ' + (ok ? 'checked' : '') + '> ' +
                '<div><b style="' + (ok ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + esc(r.tipo_error) + (r.motivo ? ' · ' + esc(r.motivo) : '') + '</b>' +
                (ok ? ' <span style="color:var(--ok);font-size:11px;font-weight:bold">✓ Resuelto</span>' : '') +
-               '<br><small>' + (m ? '[' + m.nrc + '] ' + esc(m.nombre) : 'NRC ' + esc(r.nrc)) + '</small></div>' +
+               '<br><small>' + (m ? '[' + esc(m.nrc) + '] ' + esc(m.nombre) : 'NRC ' + esc(r.nrc)) + '</small></div>' +
                '</label></li>';
       }).join('') + '</ul>'
       : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
@@ -578,21 +634,18 @@ function renderAlumnos(){
 
     return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
       '<div class="who"><b>' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
-      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + badgeProbs + '</div>' + det + '</div>';
+      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
   }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
                                 : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
 }
 
 function renderHorario(){
-  const all=materias.flatMap(m=>m.sl);
-  let h0=7, h1=19, nd=6;
+  const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
   if(all.length){
     h0=Math.min(7, Math.floor(Math.min(...all.map(x=>x.s))));
     h1=Math.max(19, Math.ceil(Math.max(...all.map(x=>x.e))));
     if(all.some(x=>x.d===6))nd=7;
   }
-  
-  // Calcula la altura de cada bloque de hora (H) dinámicamente
   const cont = $('hor');
   const availH = (cont ? cont.clientHeight : 500) - 32;
   const hoursCount = h1 - h0;
@@ -601,14 +654,68 @@ function renderHorario(){
 
   let h='<div class="grid" style="grid-template-columns:46px repeat('+nd+',1fr)"><div class="dh"></div>'+DN.slice(0,nd).map(d=>'<div class="dh">'+d+'</div>').join('');
   h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:hoursCount},(_,i)=>'<div style="height:'+H+'px;line-height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
+  
   for(let d=0;d<nd;d++){
     h+='<div class="col" style="height:'+alto+'px;background-size:100% '+H+'px">';
-    for(const n of cur.n){const m=byNrc(n);if(!m)continue;
-      const colIdx = Math.abs(String(n).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 6;
-      m.sl.filter(x=>x.d===d).forEach(x=>{
-        h+='<div class="blk c'+colIdx+'" data-q="'+esc(n)+'" title="Clic para quitar" style="top:'+(x.s-h0)*H+'px;height:'+(x.e-x.s)*H+'px"><b>'+esc(m.nombre)+'</b><span>'+fmt(x.s)+'–'+fmt(x.e)+'</span></div>';
+    
+    // 1. Recopilar todos los bloques del día
+    const dayBlocks = [];
+    for(const n of cur.n){
+      const m = byNrc(n);
+      if(!m) continue;
+      m.sl.filter(x => x.d === d).forEach(x => {
+        dayBlocks.push({ nrc: n, m, s: x.s, e: x.e });
       });
     }
+
+    // 2. Agrupar y calcular distribución para evitar solapamientos visuales
+    dayBlocks.sort((a,b) => a.s - b.s || (b.e - b.s) - (a.e - a.s));
+    const clusters = [];
+    for(const blk of dayBlocks){
+      let placed = false;
+      for(const cluster of clusters){
+        if(cluster.some(item => blk.s < item.e && item.s < blk.e)){
+          cluster.push(blk);
+          placed = true;
+          break;
+        }
+      }
+      if(!placed) clusters.push([blk]);
+    }
+
+    for(const cluster of clusters){
+      const subCols = [];
+      for(const blk of cluster){
+        let assigned = false;
+        for(let i=0; i<subCols.length; i++){
+          if(!subCols[i].some(item => blk.s < item.e && item.s < blk.e)){
+            subCols[i].push(blk);
+            blk.subCol = i;
+            assigned = true;
+            break;
+          }
+        }
+        if(!assigned){
+          subCols.push([blk]);
+          blk.subCol = subCols.length - 1;
+        }
+      }
+      const total = subCols.length;
+      for(const blk of cluster) blk.totalCols = total;
+    }
+
+    // 3. Renderizar bloques dividiendo el ancho si hay choque
+    for(const blk of dayBlocks){
+      const colIdx = Math.abs(String(blk.nrc).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 6;
+      const total = blk.totalCols || 1;
+      const sub = blk.subCol || 0;
+      const wPct = 100 / total;
+      const leftCss = `calc(${sub * wPct}% + 2px)`;
+      const widthCss = `calc(${wPct}% - 3px)`;
+
+      h += '<div class="blk c' + colIdx + '" data-q="' + esc(blk.nrc) + '" title="' + esc(blk.m.nombre) + ' (Clic para quitar)" style="top:' + ((blk.s - h0) * H) + 'px;height:' + ((blk.e - blk.s) * H) + 'px;left:' + leftCss + ';width:' + widthCss + '"><b>' + esc(blk.m.nombre) + '</b><span>' + fmt(blk.s) + '–' + fmt(blk.e) + '</span></div>';
+    }
+
     h+='</div>';
   }
   $('hor').innerHTML=h+'</div>';
@@ -628,20 +735,28 @@ function renderTodo(){renderMaterias();renderAlumnos();renderHorario();renderBot
 renderTodo();
 
 /* ---------- puente: materias filtradas -> gestor ---------- */
+const campo=(r,L)=>{const k=Object.keys(r||{}).find(k=>L.includes(nz(k)));return k?String(r[k]).replace(',','.'):''};
 function materiasFiltradas(){
-  const out=[];let libre=900001;
+  const usados=new Set(),ids=new Set(),out=[];let libre=900001;
   for(const x of aceptadas){
-    const it=x.it, cod=String(it.rawCode||'').trim(), nro=String(it.nro||'').trim(), hor=String(it.hor||'').trim();
-    const base = cod || nro || String(libre++);
+    const it=x.it,
+          cod=String(it.rawCode||'').trim(),
+          nro=String(it.nro||'').trim(),
+          hor=String(it.hor||'').trim(),
+          base=nro||cod, // <-- CAMBIO AQUÍ: Prioriza el número de sección/NRC
+          id=base||(libre++);
+    const dk=normCode(id)+'|'+nz(hor);if(usados.has(dk))continue;usados.add(dk);
+    let id2=String(id),c2=1;while(ids.has(id2))id2=id+'X'+(++c2);ids.add(id2);
     out.push({
-      nrc: base,
-      cod: cod || nro || base,
-      nro: nro,
-      nombre: it.rawName || cod || ('Materia ' + base),
-      horario: hor,
-      profesor: '',
-      det: [nro && 'Curso ' + nro, it.pre && 'Prelaciones: ' + it.pre].filter(Boolean).join(' · '),
-      sl: slots(hor)
+      nrc:id2,
+      cod:cod||nro,
+      nro:nro,
+      nombre:it.rawName||cod,
+      horario:hor,
+      profesor:'',
+      det:[nro&&'Sección/NRC '+nro,it.pre&&'Prelaciones: '+it.pre].filter(Boolean).join(' · '),
+      pre:String(it.pre||''),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
+      sl:slots(hor)
     });
   }
   return out;
@@ -663,6 +778,16 @@ $('btnMinBot').onclick=()=>{
 };
 // También recalcula el horario si la ventana cambia de tamaño
 window.addEventListener('resize', renderHorario);
+$('qMat').oninput=renderMaterias;
+function aplicarAj(){$('btnUndo').hidden=!ajustes.undo;document.body.classList.toggle('big',!!ajustes.big)}
+[['aConf','conf'],['aUndo','undo'],['aBig','big']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
+aplicarAj();
+$('btnUndo').onclick=deshacer;
+document.addEventListener('keydown',e=>{if(ajustes.undo&&(e.ctrlKey||e.metaKey)&&e.key==='z'&&!/TEXTAREA|INPUT/.test(e.target.tagName)){e.preventDefault();deshacer()}});
+$('btnPrint').onclick=()=>window.print();
+$('btnResp').onclick=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_horarios.json');
+$('btnRest').onclick=()=>$('fResp').click();
+$('fResp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o||typeof o!=='object')throw 0;st=o;guardar();aplicar();aviso('Respaldo restaurado.')}catch(x){aviso('Respaldo inválido.',true)}});e.target.value=''};
 </script>
 </body>
 </html>
