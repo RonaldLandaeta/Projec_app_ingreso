@@ -58,6 +58,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
 @media(max-width:1000px){body{height:auto}main{grid-template-columns:1fr}.pn{max-height:60vh}.bot{grid-template-columns:1fr;height:auto}.bot .pn{min-height:220px}}
 
 [hidden]{display:none!important}
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:10px 2px 4px}.sec span{background:var(--bd);border-radius:99px;padding:0 7px;margin-left:4px}
 .acc{font-size:12px}.acc[open]{background:var(--pn);border:1px solid var(--bd);padding:6px 10px;border-radius:8px;position:absolute;z-index:8}.acc label{display:block;padding:2px 0}
 body.big{font-size:17px}
 @media print{.top,header,main>section:not(:nth-child(2)),.bot,#aviso{display:none!important}main{display:block}body{height:auto}.pn{border:0}}
@@ -89,7 +90,7 @@ body.big{font-size:17px}
   <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
   <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
     <p class="mut">La primera fila son los encabezados (no importan mayúsculas ni tildes). Se aceptan .xlsx (primera hoja), .csv y .json.</p>
-    <p><b>Formato de entrega:</b> <code>Codigo;Nro_Curso;Materia;Prelaciones;Horario</code> (separado por punto y coma).<br>Ejemplo: <code>MAT-101;10234;Cálculo I;MAT-100;Lunes y Miércoles 07:00-09:00</code></p>
+    <p><b>Formato de entrega:</b> <code>Codigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario</code> (separado por punto y coma).<br>Ejemplo: <code>MAT-101;10234;Cálculo I;MAT-100;Lunes y Miércoles 07:00-09:00</code></p>
     <table><tr><th>Columna</th><th>Encabezados que se reconocen</th><th>Uso</th></tr>
       <tr><td>Codigo</td><td>Codigo, Cod, ID, Clave, Sigla</td><td>Criterio principal para comparar con la malla</td></tr>
       <tr><td>Nro_Curso</td><td>Nro_Curso, Nro de Curso, Numero de Curso</td><td>Número del curso (NRC): identifica cada sección en el gestor</td></tr>
@@ -97,7 +98,7 @@ body.big{font-size:17px}
       <tr><td>Prelaciones</td><td>Prelaciones, Prerrequisitos</td><td>Materias previas (informativo; se muestra en el gestor)</td></tr>
       <tr><td>Horario</td><td>Horario, Dias y Horas</td><td>Texto como «Lunes y Miércoles 07:00-09:00»; el gestor lo necesita para armar el horario</td></tr>
     </table>
-    <p class="mut">La malla debe tener al menos Codigo o Materia. Cualquier otra columna se conserva en «Otros datos». Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
+    <p><b>Correquisitos</b> = Nro_Curso de la sección que va junta. Si es <u>el mismo Nro_Curso</u> de la fila (Física y su laboratorio) se ven juntas y se agregan o quitan juntas. Si es <u>otro Nro_Curso</u>, esa materia lo exige aprobado (<code>materias_aprobadas</code> del alumno en el data.json) o inscrito en el mismo semestre.</p><p class="mut">La malla debe tener al menos Codigo o Materia. Cualquier otra columna se conserva en «Otros datos». Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
     <button class="s" id="bPlant">Descargar plantilla CSV</button></details></section>
   <section class="card">
     <h2>1 · Malla curricular principal</h2>
@@ -135,6 +136,7 @@ body.big{font-size:17px}
   <span id="estado" class="mut">Sin datos cargados</span>
   <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Permitir deshacer (botón y Ctrl+Z)</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
   <button class="b s" id="btnUndo" hidden style="padding:4px 8px;font-size:12px">↶ Deshacer</button>
+  <button class="b s" id="btnRedo" hidden style="padding:4px 8px;font-size:12px">↷ Rehacer</button>
   <button class="b s" id="btnPrint" style="padding:4px 8px;font-size:12px">Imprimir horario</button>
   <button class="b s" id="btnResp" style="padding:4px 8px;font-size:12px">Respaldo ⬇</button>
   <button class="b s" id="btnRest" style="padding:4px 8px;font-size:12px">Restaurar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
@@ -199,7 +201,7 @@ function jrows(j){
 }
 const KC=['CODIGO','COD','ID','CLAVE','NRC','SIGLA'],KN=['NOMBRE','MATERIA','ASIGNATURA','CURSO','NAME'];
 /* formato de entrega: Codigo;Nro_Curso;Materia;Prelaciones;Horario */
-const KNRO=['NRO CURSO','NRO DE CURSO','NUMERO CURSO','NUMERO DE CURSO','NRO'],KPRE=['PRELACIONES','PRELACION','PRERREQUISITOS','PRERREQUISITO'],KHOR=['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'];
+const KNRO=['NRO CURSO','NRO DE CURSO','NUMERO CURSO','NUMERO DE CURSO','NRO'],KPRE=['PRELACIONES','PRELACION','PRERREQUISITOS','PRERREQUISITO'],KHOR=['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'],KCOR=['CORREQUISITOS','CORREQUISITO'];
 function columna(keys,L,excluir){
   const ok=k=>!(excluir&&/PROFESOR|DOCENTE|ALUMNO|ESTUDIANTE/.test(nz(k)));
   return keys.find(k=>ok(k)&&L.includes(nz(k)))||keys.find(k=>ok(k)&&L.some(x=>nz(k).startsWith(x+' ')))||null;
@@ -213,11 +215,11 @@ async function parsear(nombre,dato){
   else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrows(JSON.parse(dato.replace(/^\uFEFF/,'')));
   else rows=csv(dato);
   if(!rows.length)throw new Error('no se encontraron filas');
-  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false);
+  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false),co=columna(keys,KCOR,false);
   if(!c&&!n)throw new Error('no hay columna de código ni de nombre de materia');
   const items=rows.map(r=>{
-    const extra=Object.entries(r).filter(([k,v])=>![c,n,nr,pr,ho].includes(k)&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
-    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',nro:nr?r[nr]:'',pre:pr?r[pr]:'',hor:ho?r[ho]:'',extra,row:r};
+    const extra=Object.entries(r).filter(([k,v])=>![c,n,nr,pr,ho,co].includes(k)&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
+    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',nro:nr?r[nr]:'',pre:pr?r[pr]:'',cor:co?r[co]:'',hor:ho?r[ho]:'',extra,row:r};
   }).filter(it=>it.code||it.name);
   return{items,c,n,ho:!!ho};
 }
@@ -315,8 +317,8 @@ function renderFiltro(){
   $('cnt').textContent=ok.length;$('bExp').disabled=$('bCsv').disabled=$('bGo').disabled=!ok.length;$('goInfo').textContent=ok.length?ok.length+' materia(s) pasarán al gestor de horarios.':'';
   if(!malla){$('res').innerHTML='<p class="mut">Primero carga la malla curricular principal.</p>';$('faltan').textContent='—';return}
   const ver=$('verNo').checked,filas=ok.map(x=>({...x,s:1})).concat(ver?no.map(x=>({...x,s:0})):[]);
-  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Codigo</th><th>Nro_Curso</th><th>Materia</th><th>Prelaciones</th><th>Horario</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Otros datos</th></tr>'+
-    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada'+(malla.byName.has(x.it.name)?' · ⚠ el nombre coincide con la malla (revisar código)':''))+'</td>':'')+
+  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Codigo</th><th>Nro_Curso</th><th>Materia</th><th>Prelaciones</th><th>Correquisitos</th><th>Horario</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Otros datos</th></tr>'+
+    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.cor)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada'+(malla.byName.has(x.it.name)?' · ⚠ el nombre coincide con la malla (revisar código)':''))+'</td>':'')+
       '<td>'+(x.s?esc(x.por):'—')+'</td><td>'+esc(x.it.extra)+'</td></tr>').join('')+'</table>'
     :'<p class="mut">'+(archivos.length?'Ninguna materia de los archivos pertenece a la malla.':'Carga al menos un archivo de materias.')+'</p>';
   const falt=malla.entries.filter(e=>!cubiertas.has(e));
@@ -357,13 +359,13 @@ function xlsx(filas){
 function descargar(blob,nombre){
   const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
 }
-const filasExport=()=>[['Codigo','Nro_Curso','Materia','Prelaciones','Horario','Archivo','Coincidio por','Otros datos']].concat(aceptadas.map(x=>[x.it.rawCode,x.it.nro,x.it.rawName,x.it.pre,x.it.hor,x.a,x.por,x.it.extra]));
+const filasExport=()=>[['Codigo','Nro_Curso','Materia','Prelaciones','Correquisitos','Horario','Archivo','Coincidio por','Otros datos']].concat(aceptadas.map(x=>[x.it.rawCode,x.it.nro,x.it.rawName,x.it.pre,x.it.cor,x.it.hor,x.a,x.por,x.it.extra]));
 $('bExp').onclick=()=>{try{descargar(xlsx(filasExport()),'materias_en_malla.xlsx')}catch(e){alert('No se pudo generar el Excel: '+e.message)}};
 $('bCsv').onclick=()=>{
   const q=s=>'"'+String(s).replace(/"/g,'""').replace(/^([=+\-@])/,"'$1")+'"';
   descargar(new Blob(['\uFEFFsep=;\r\n'+filasExport().map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'materias_en_malla.csv');
 };
-$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Materia;Prelaciones;Horario\r\nMAT-101;10234;Calculo I;MAT-100;Lunes y Miercoles 07:00-09:00\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
+$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario\r\nFIS-101;10300;Fisica I;MAT-101;10300;Lunes y Viernes 11:00-13:00\r\nFIS-101L;10300;Laboratorio de Fisica I;;10300;Viernes 14:00-16:00\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
 
 
 const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
@@ -377,7 +379,7 @@ const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:fal
 
 /* Normalización estricta de códigos y NRCs */
 const normCode = nc;
-let idx1=new Map(),idx2=new Map(),repBy=new Map();
+let idx1=new Map(),idx2=new Map(),repBy=new Map(),rcache=new Map();
 const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):null};
 const colorIdx = s => {
   const str = String(s || '');
@@ -403,6 +405,7 @@ function slots(h){
     while((d=dr.exec(seg))){const i=D.indexOf(d[1]),j=d[2]?D.indexOf(d[2]):i;for(let k=i;k<=j;k++)out.push({d:k,s:st0,e})}
   }
   return out}
+const tok=s=>String(s==null?'':s).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
 const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
 const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)&&normCode(n)!==normCode(m.cod)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
 
@@ -421,7 +424,7 @@ const normM=a=>(a||[]).map(m=>{
     horario,
     profesor,
     det,
-    pre:String(m.pre||m.prelaciones||''),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
+    pre:String(m.pre||m.prelaciones||m.prerrequisitos||''),coreq:tok(m.correquisitos||m.coreq),prel:tok(m.pre||m.prelaciones||m.prerrequisitos),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
   };
 }).filter(m => m.nrc && m.nombre);
 
@@ -454,7 +457,7 @@ function aplicar(){
   }):[];
   reportes=datos?(datos.reportes||[]):[];
   repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
-  idx1=new Map();idx2=new Map();
+  idx1=new Map();idx2=new Map();rcache=new Map();
   materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
   materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
@@ -466,32 +469,73 @@ function aplicar(){
 
 /* ---------- acciones ---------- */
 const ajustes=(()=>{try{return JSON.parse(localStorage.getItem('hr_ajustes')||'{}')}catch(e){return{}}})();
-const undoSt=[];
-function snap(){undoSt.push({k:sel||'_libre',n:[...get().n]});if(undoSt.length>50)undoSt.shift()}
-function deshacer(){const u=undoSt.pop();if(!u)return aviso('Nada que deshacer.',true);
-  st[u.k]=st[u.k]||{n:[],nota:'',listo:false};st[u.k].n=u.n;st[u.k].ed=true;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
-function validar(m,cur){
+const undoSt=[],redoSt=[];
+function snap(){undoSt.push({k:sel||'_libre',n:[...get().n]});if(undoSt.length>50)undoSt.shift();redoSt.length=0}
+function viajar(de,a,vacio){const u=de.pop();if(!u)return aviso(vacio,true);
+  const c=st[u.k]=st[u.k]||{n:[],nota:'',listo:false};a.push({k:u.k,n:[...c.n]});
+  c.n=u.n;c.ed=true;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
+const deshacer=()=>viajar(undoSt,redoSt,'Nada que deshacer.');
+const rehacer=()=>viajar(redoSt,undoSt,'Nada que rehacer.');
+function validar(m,cur,ex){
+  ex=ex||[];
   if(!m.sl.length)return 'No se reconoce el horario de «'+m.nombre+'».';
   const dup=cur.n.map(byNrc).find(o=>o&&o!==m&&normCode(o.nrc)!==normCode(m.nrc)&&(normCode(o.cod)===normCode(m.cod)||nz(o.nombre)===nz(m.nombre)));
   if(dup)return '«'+m.nombre+'» ya está inscrita en otra sección ('+dup.nrc+').';
-  const c=conflictosCon(m);if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
+  const c=conflictosCon(m).concat(ex.filter(o=>choca(o.sl,m.sl)));if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
   const a=alumnos.find(x=>x.ci===sel);
   if(a){
-    if(Array.isArray(a.aprobadas)&&m.pre){const ap=new Set(a.aprobadas.map(normCode)),f=m.pre.split(/[,;\/]|\sy\s/).map(normCode).filter(Boolean).filter(p=>!ap.has(p));if(f.length)return 'Faltan prelaciones: '+f.join(', ')+'.'}
+    const aa=a.materias_aprobadas||a.aprobadas;
+    if(Array.isArray(aa)&&m.prel&&m.prel.length){const ap=new Set(aa.map(nc)),f=m.prel.filter(p=>!ap.has(nc(p)));if(f.length)return 'Faltan prelaciones de «'+m.nombre+'»: '+f.join(', ')+'.'}
     const mx=+(a.max_creditos||a.max_uc||0);
-    if(mx&&m.cred){const t=cur.n.map(byNrc).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
+    if(mx&&m.cred){const t=cur.n.map(byNrc).concat(ex).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
   }
   if(m.cupo){const n=alumnos.filter(x=>x.ci!==sel&&st[x.ci]&&(st[x.ci].n||[]).some(q=>normCode(q)===normCode(m.nrc))).length;if(n>=m.cupo)return 'Sin cupo ('+n+'/'+m.cupo+').'}
   return ''}
+/* ---------- correquisitos (mismo Nro_Curso = mutuas; otro Nro_Curso = aprobada o en el mismo semestre) ---------- */
+const aprobadasDe=ci=>{const a=alumnos.find(x=>x.ci===ci);return new Set(((a&&(a.materias_aprobadas||a.aprobadas))||[]).map(nc))};
+function reqs(m){
+  if(rcache.has(m))return rcache.get(m);
+  const j=[],p=[],mine=(m.coreq||[]).map(String),mn=String(m.nro);
+  for(const o of materias){
+    if(o===m)continue;const on=String(o.nro);
+    if(on===mn&&(mine.includes(on)||(o.coreq||[]).map(String).includes(on)))j.push(o);
+    else if(on!==mn&&mine.includes(on))p.push(o);
+  }
+  const r={j,p};rcache.set(m,r);return r}
+const okReq=(m,S,A)=>{const r=reqs(m);return r.j.every(o=>S.has(normCode(o.nrc)))&&r.p.every(o=>S.has(normCode(o.nrc))||A.has(nc(o.cod)))};
+function planAgregar(m){
+  const A=aprobadasDe(sel),S=new Set(get().n.map(normCode)),add=[],cola=[m];
+  while(cola.length){
+    const x=cola.shift();if(S.has(normCode(x.nrc)))continue;S.add(normCode(x.nrc));add.push(x);
+    const r=reqs(x);r.j.forEach(o=>cola.push(o));r.p.filter(o=>!A.has(nc(o.cod))).forEach(o=>cola.push(o));
+  }
+  return add}
+function quitar(m){
+  const cur=get(),A=aprobadasDe(sel),q=[m],fuera=[],tc=normCode(m.nrc),tcod=normCode(m.cod);
+  cur.n=cur.n.filter(x=>normCode(x)!==tc&&normCode(x)!==tcod);
+  while(q.length){
+    const r=q.shift();
+    for(const id of [...cur.n]){
+      const x=byNrc(id);if(!x)continue;const rq=reqs(x);
+      if(rq.j.concat(rq.p).includes(r)&&!okReq(x,new Set(cur.n.map(normCode)),A)){cur.n=cur.n.filter(y=>y!==id);fuera.push(x.nombre);q.push(x)}
+    }
+  }
+  if(fuera.length)aviso('También se quitó: '+fuera.join(', ')+' (no se puede ver sin «'+m.nombre+'»).')}
+const faltantesDe=ci=>{const c=(st[ci]&&st[ci].n)||[],S=new Set(c.map(normCode)),A=aprobadasDe(ci);return c.map(byNrc).filter(x=>x&&!okReq(x,S,A)).map(x=>x.nombre)};
 function toggle(nrc){
   const m=byNrc(nrc),cur=get();if(!m)return;
-  const tc=normCode(m.nrc),idx=cur.n.findIndex(x=>normCode(x)===tc||normCode(x)===normCode(m.cod));
-  if(idx>=0){
+  const tc=normCode(m.nrc),tcod=normCode(m.cod);
+  if(cur.n.some(x=>normCode(x)===tc||normCode(x)===tcod)){
     if(ajustes.conf&&!confirm('¿Quitar «'+m.nombre+'» del horario?'))return;
-    snap();cur.n.splice(idx,1);
+    snap();quitar(m);
   }else{
-    const err=validar(m,cur);if(err)return aviso(err,true);
-    snap();cur.n.push(m.nrc);
+    const add=planAgregar(m);
+    for(let i=0;i<add.length;i++){
+      const x=add[i],err=validar(x,cur,add.slice(0,i));
+      if(err)return aviso(x===m?err:'Para agregar «'+m.nombre+'» hace falta «'+x.nombre+'», pero '+err.charAt(0).toLowerCase()+err.slice(1),true);
+    }
+    snap();cur.n.push(...add.map(x=>x.nrc));
+    if(add.length>1)aviso('Se agregó también: '+add.slice(1).map(x=>x.nombre).join(', ')+'.');
   }
   cur.ed=true;guardar();renderMaterias();renderHorario();renderAlumnos();
 }
@@ -518,6 +562,7 @@ $('nota').oninput=()=>{const c=get();c.nota=$('nota').value;if(c.listo&&!c.nota.
 $('btnListo').onclick=()=>{
   const c=get();
   if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
+  if(!c.listo){const f=faltantesDe(sel);if(f.length)return aviso('Faltan correquisitos para: '+f.join(', ')+'.',true)}
   if(!c.listo){const a=alumnos.find(x=>x.ci===sel);if(a&&pendientesReal(a)>0&&!confirm('Quedan '+pendientesReal(a)+' problema(s) sin marcar como resueltos. ¿Marcar como listo de todos modos?'))return}c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
 };
 const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota,nrcs:(st[a.ci].n||[]).join(' '),mats:(st[a.ci].n||[]).map(n=>{const m=byNrc(n);return m?m.nombre+' ('+m.horario+')':n}).join(' | ')}));
@@ -532,49 +577,46 @@ $('btnExp').onclick=()=>{
 
 /* ---------- render ---------- */
 function renderMaterias(){
-  const cur = get();
-  const repsSel = reportes.filter(r => sel && String(r.ci) === sel);
-  const curNorm = new Set(cur.n.map(normCode));
-
-  // Coincidencia estricta por NRC o Código completo (evita falsos positivos por número secundario)
-  const isInc = m => cur.n.some(enrolled => {
-    const k = normCode(enrolled);
-    return normCode(m.nrc) === k || normCode(m.cod) === k;
-  });
-  
-  const getRepStatus = m => {
-    if (!sel) return { isRep: false, allow: true };
-    const mCodes = new Set([m.nrc, m.cod].filter(Boolean).map(normCode));
-    const matchedReps = repsSel.filter(r => mCodes.has(normCode(r.nrc)));
-    if (!matchedReps.length) return { isRep: false, allow: true }; // No reportada -> Mostrar
-
-    const isCambioHorario = matchedReps.some(r => {
-      const txt = (String(r.tipo_error || '') + ' ' + String(r.motivo || '')).toLowerCase();
-      return txt.includes('cambio') || txt.includes('cruce') || txt.includes('choque') || txt.includes('horario') || txt.includes('seccion') || txt.includes('sección');
-    });
-
-    return { isRep: true, allow: isCambioHorario };
-  };
-
+  const cur=get(),A=aprobadasDe(sel),repsSel=reportes.filter(r=>sel&&String(r.ci)===sel);
+  const isInc=m=>cur.n.some(e=>{const k=normCode(e);return normCode(m.nrc)===k||normCode(m.cod)===k});
+  const getRepStatus=m=>{
+    if(!sel)return{isRep:false,allow:true};
+    const mc=new Set([m.nrc,m.cod].filter(Boolean).map(normCode));
+    const rs=repsSel.filter(r=>mc.has(normCode(r.nrc)));
+    if(!rs.length)return{isRep:false,allow:true};
+    const cambio=rs.some(r=>{const t=(String(r.tipo_error||'')+' '+String(r.motivo||'')).toLowerCase();return t.includes('cambio')||t.includes('cruce')||t.includes('choque')||t.includes('horario')||t.includes('seccion')||t.includes('sección')});
+    return{isRep:true,allow:cambio}};
   const qq=nz($('qMat').value);
-  const materiasVisibles = materias.filter(m => (isInc(m) || getRepStatus(m).allow) && (!qq || nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
-  const prio = new Map(materiasVisibles.map(m => [m, isInc(m) ? 1 : getRepStatus(m).isRep ? 2 : conflictosCon(m).length ? 3 : 4]));
-const materiasOrdenadas = [...materiasVisibles].sort((a, b) => prio.get(a) - prio.get(b) || String(a.nombre || '').localeCompare(String(b.nombre || '')) || String(a.nrc).localeCompare(String(b.nrc)));
-  const grupos = new Map(); materiasOrdenadas.forEach(m => grupos.set(m.nombre, (grupos.get(m.nombre) || 0) + 1)); let prevN = null;
-
-  $('mats').innerHTML = materiasOrdenadas.length ? materiasOrdenadas.map(m => {
-    let cls = 'mat', tag = ''; const gh = (m.nombre !== prevN && grupos.get(m.nombre) > 1) ? '<div class="mut" style="margin:6px 2px 2px;font-size:11px">' + esc(m.nombre) + ' · ' + grupos.get(m.nombre) + ' secciones</div>' : ''; prevN = m.nombre;
-    const inc = isInc(m);
-    const repFlag = getRepStatus(m).isRep;
-    if (inc) { cls += ' on'; tag = '<em class="t ok">En horario ✓</em>'; }
-    else if (!m.sl.length) { cls += ' off'; tag = '<em class="t">Horario no reconocido</em>'; }
-    else {
-      const c = conflictosCon(m);
-      if (c.length) { cls += ' off'; tag = '<em class="t bad">Choca con ' + esc(c.map(x => x.nombre).join(', ')) + '</em>'; }
+  const vis=materias.filter(m=>(isInc(m)||getRepStatus(m).allow)&&(!qq||nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
+  const ctx=materias.filter(m=>isInc(m)||getRepStatus(m).isRep);          // las que "piden" requisitos: en horario o reportadas
+  const necesita=(x,m)=>{const r=reqs(x);return r.j.includes(m)||(r.p.includes(m)&&!A.has(nc(m.cod)))};
+  const SEC=[['horario','En horario'],['reporte','Reporte'],['correq','Correquisito'],['prerreq','Prerrequisito'],['choque','Choque de horario'],['sobra','Materias sobrantes']];
+  const G={},H=new Map();SEC.forEach(s=>G[s[0]]=[]);
+  for(const m of vis){
+    const on=isInc(m),apr=!!m.cod&&A.has(nc(m.cod)),rp=getRepStatus(m).isRep;
+    let cls='mat',tag='',k='sobra';
+    if(on){k='horario';cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
+    else{
+      const c=m.sl.length?conflictosCon(m):[];
+      const nec=ctx.filter(x=>x!==m&&necesita(x,m)),pre=apr?[]:ctx.filter(x=>x!==m&&(x.prel||[]).map(nc).includes(nc(m.cod)));
+      if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
+      else if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}
+      if(nec.length)tag+='<em class="t">Correquisito de '+esc(nec.map(x=>x.nombre).join(', '))+'</em>';
+      if(pre.length)tag+='<em class="t">Prerrequisito de '+esc(pre.map(x=>x.nombre).join(', '))+'</em>';
+      k=rp?'reporte':nec.length?'correq':pre.length?'prerreq':c.length?'choque':'sobra';
     }
-    if (repFlag) tag += '<em class="t warn">⚠ reportada</em>';
-    return gh + '<div class="' + cls + '" data-nrc="' + esc(m.nrc) + '"><b>' + esc(m.nombre) + '</b><span class="n">' + esc(m.cod || m.nrc) + '</span><small>' + esc(m.horario) + '</small>' + (m.det ? '<small>' + esc(m.det) + '</small>' : '') + tag + '</div>';
-  }).join('') : '<p class="mut">No hay materias disponibles para este alumno.</p>';
+    if(rp)tag+='<em class="t warn">⚠ reportada</em>';
+    if(apr)tag+='<em class="t ok">Aprobada ✓</em>';
+    G[k].push(m);
+    H.set(m,'<div class="'+cls+'" data-nrc="'+esc(m.nrc)+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>');
+  }
+  const ord=(a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''))||String(a.nrc).localeCompare(String(b.nrc));
+  $('mats').innerHTML=vis.length?SEC.filter(s=>G[s[0]].length).map(s=>{
+    const L=G[s[0]].sort(ord),gc=new Map();L.forEach(m=>gc.set(m.nombre,(gc.get(m.nombre)||0)+1));let pv=null;
+    return '<div class="sec">'+s[1]+' <span>'+L.length+'</span></div>'+L.map(m=>{
+      const gh=(m.nombre!==pv&&gc.get(m.nombre)>1)?'<div class="mut" style="margin:6px 2px 2px;font-size:11px">'+esc(m.nombre)+' · '+gc.get(m.nombre)+' secciones</div>':'';
+      pv=m.nombre;return gh+H.get(m)}).join('')
+  }).join(''):'<p class="mut">No hay materias disponibles para este alumno.</p>';
 }
 let fPerfil = '', fOrden = 'pend', fOcultar = false;
 const perfilDe = a => a.perfil || 'Alumno';
@@ -584,13 +626,14 @@ function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],out=[],ms=[];
   for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
     if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
     if(nz(ms[i].nombre)===nz(ms[j].nombre))out.push('Materia duplicada: '+ms[i].nombre)}
+  const S=new Set(c.map(normCode)),A=aprobadasDe(a.ci);ms.filter(x=>!okReq(x,S,A)).forEach(x=>out.push('Falta correquisito/prerrequisito de «'+x.nombre+'»'));
   return out}
 const totalProbs = a => repsDe(a).length;
 const pendientesReal = a => repsDe(a)
   .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
 // Mantiene la prioridad total MIENTRAS exista al menos 1 problema sin resolver.
 // Solo pierde prioridad (pasa a 0) cuando se completan TODOS los checks.
-const pendientesOrden = a  => pendientesReal(a) > 0 ? totalProbs(a) : 0;
+const pendientesOrden = a => (st[a.ci] && st[a.ci].listo) ? 0 : totalProbs(a);
 $('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
 $('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
 
@@ -754,8 +797,8 @@ function materiasFiltradas(){
       nombre:it.rawName||cod,
       horario:hor,
       profesor:'',
-      det:[nro&&'Sección/NRC '+nro,it.pre&&'Prelaciones: '+it.pre].filter(Boolean).join(' · '),
-      pre:String(it.pre||''),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
+      det:[nro&&'Sección/NRC '+nro,it.pre&&'Prelaciones: '+it.pre,it.cor&&'Correquisitos: '+it.cor].filter(Boolean).join(' · '),
+      pre:String(it.pre||''),coreq:tok(it.cor),prel:tok(it.pre),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
       sl:slots(hor)
     });
   }
@@ -779,11 +822,12 @@ $('btnMinBot').onclick=()=>{
 // También recalcula el horario si la ventana cambia de tamaño
 window.addEventListener('resize', renderHorario);
 $('qMat').oninput=renderMaterias;
-function aplicarAj(){$('btnUndo').hidden=!ajustes.undo;document.body.classList.toggle('big',!!ajustes.big)}
+function aplicarAj(){$('btnUndo').hidden=!ajustes.undo;document.body.classList.toggle('big',!!ajustes.big);$('btnRedo').hidden=!ajustes.undo;}
 [['aConf','conf'],['aUndo','undo'],['aBig','big']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
 aplicarAj();
 $('btnUndo').onclick=deshacer;
-document.addEventListener('keydown',e=>{if(ajustes.undo&&(e.ctrlKey||e.metaKey)&&e.key==='z'&&!/TEXTAREA|INPUT/.test(e.target.tagName)){e.preventDefault();deshacer()}});
+$('btnRedo').onclick=rehacer;
+document.addEventListener('keydown',e=>{if(ajustes.undo&&(e.ctrlKey||e.metaKey)&&!/TEXTAREA|INPUT/.test(e.target.tagName)){const k=e.key.toLowerCase();if(k==='z'&&!e.shiftKey){e.preventDefault();deshacer()}else if(k==='y'||(k==='z'&&e.shiftKey)){e.preventDefault();rehacer()}}}); 
 $('btnPrint').onclick=()=>window.print();
 $('btnResp').onclick=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_horarios.json');
 $('btnRest').onclick=()=>$('fResp').click();
