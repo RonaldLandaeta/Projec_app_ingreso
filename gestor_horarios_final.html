@@ -87,6 +87,9 @@ body.big{font-size:17px}
 </nav>
 <div id="fase1">
 <div class="f1main">
+    <section class="card"><h2>Profesor</h2>
+    <label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name" style="font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);min-width:260px"></label>
+  </section>
   <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
   <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
     <p class="mut">La primera fila son los encabezados (no importan mayúsculas ni tildes). Se aceptan .xlsx (primera hoja), .csv y .json.</p>
@@ -139,7 +142,7 @@ body.big{font-size:17px}
   <button class="b s" id="btnRedo" hidden style="padding:4px 8px;font-size:12px">↷ Rehacer</button>
   <button class="b s" id="btnPrint" style="padding:4px 8px;font-size:12px">Imprimir horario</button>
   <button class="b s" id="btnResp" style="padding:4px 8px;font-size:12px">Respaldo ⬇</button>
-  <button class="b s" id="btnRest" style="padding:4px 8px;font-size:12px">Restaurar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
+  <button class="b s" id="btnRest" style="padding:4px 8px;font-size:12px">Cargar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
 </header>
 <main>
   <section class="pn"><h2>Materias</h2><div class="flt"><input id="qMat" placeholder="Buscar: nombre, código, día…" style="flex:1;font:inherit;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)"></div><div class="sc" id="mats"></div></section>
@@ -215,7 +218,7 @@ async function parsear(nombre,dato){
   else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrows(JSON.parse(dato.replace(/^\uFEFF/,'')));
   else rows=csv(dato);
   if(!rows.length)throw new Error('no se encontraron filas');
-  const keys=Object.keys(rows[0]),c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false),co=columna(keys,KCOR,false);
+  const keys=[...new Set(rows.slice(0,300).flatMap(r=>Object.keys(r)))],c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false),co=columna(keys,KCOR,false);
   if(!c&&!n)throw new Error('no hay columna de código ni de nombre de materia');
   const items=rows.map(r=>{
     const extra=Object.entries(r).filter(([k,v])=>![c,n,nr,pr,ho,co].includes(k)&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
@@ -240,7 +243,12 @@ async function xlsxRows(buf){
   const leerX=async nm=>{const f=files[nm];if(!f)return null;
     const s=f.o+30+dv.getUint16(f.o+26,true)+dv.getUint16(f.o+28,true),d=u.subarray(s,s+f.cs);
     return dec.decode(f.m===0?d:await inflar(d))};
-  const hoja=files['xl/worksheets/sheet1.xml']?'xl/worksheets/sheet1.xml':Object.keys(files).filter(k=>/^xl\/worksheets\/[^/]+\.xml$/.test(k)).sort()[0];
+  let hoja=null;
+  try{const px=s=>new DOMParser().parseFromString(s,'application/xml'),wbx=await leerX('xl/workbook.xml'),rlx=await leerX('xl/_rels/workbook.xml.rels');
+    if(wbx&&rlx){const s0=px(wbx).getElementsByTagName('sheet')[0],rid=s0&&(s0.getAttribute('r:id')||s0.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')),
+      rel=[...px(rlx).getElementsByTagName('Relationship')].find(r=>r.getAttribute('Id')===rid);
+      if(rel){const tg=rel.getAttribute('Target').replace(/^\//,'');hoja=tg.startsWith('xl/')?tg:'xl/'+tg}}}catch(e){}
+  if(!hoja||!files[hoja])hoja=files['xl/worksheets/sheet1.xml']?'xl/worksheets/sheet1.xml':Object.keys(files).filter(k=>/^xl\/worksheets\/[^/]+\.xml$/.test(k)).sort()[0];
   if(!hoja)throw new Error('no se encontró ninguna hoja en el .xlsx');
   const xml=s=>new DOMParser().parseFromString(s,'application/xml');
   const sst=await leerX('xl/sharedStrings.xml'),ss=sst?[...xml(sst).getElementsByTagName('si')].map(x=>x.textContent):[];
@@ -374,19 +382,16 @@ const pad=n=>String(n).padStart(2,'0'),fmt=h=>pad(Math.floor(h))+':'+pad(Math.ro
 let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm;
 const abiertos=new Set();
 try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
-const guardar=()=>{try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
+let gt=0;const guardarYa=()=>{clearTimeout(gt);gt=0;try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
+const guardar=()=>{clearTimeout(gt);gt=setTimeout(guardarYa,300)};                        // no serializa todo en cada tecla
+addEventListener('beforeunload',()=>{if(gt)guardarYa()});addEventListener('pagehide',()=>{if(gt)guardarYa()});
 const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
 
 /* Normalización estricta de códigos y NRCs */
 const normCode = nc;
-let idx1=new Map(),idx2=new Map(),repBy=new Map(),rcache=new Map();
+let idx1=new Map(),idx2=new Map(),repBy=new Map(),rcache=new Map(),acache=new Map();
 const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):null};
-const colorIdx = s => {
-  const str = String(s || '');
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
-  return Math.abs(hash) % 6;
-};
+function canonN(arr){const ok=[],fuera=[],seen=new Set();for(const n of arr||[]){const s=String(n).trim(),m=byNrc(s),v=m?m.nrc:s,k=normCode(v);if(!k||seen.has(k))continue;seen.add(k);(m?ok:fuera).push(v)}return{ok,fuera}}
 
 const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
 
@@ -397,17 +402,20 @@ function slots(h){
   const t=norm(h).replace(/[–—]/g,'-'),out=[],D=['lun','mar','mie','jue','vie','sab','dom'];
   const re=/(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?\s*(?:-|a)\s*(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?/g;
   const hh=(x,mi,ap)=>{x=+x;if(ap==='pm'&&x<12)x+=12;if(ap==='am'&&x===12)x=0;return x+mi/60};
-  let m,last=0;
+  let m,last=0,prevD=[];
   while((m=re.exec(t))){
     const seg=t.slice(last,m.index);last=re.lastIndex;
     const e=hh(m[4],+m[5],m[6]);let st0=hh(m[1],+m[2],m[3]||m[6]);if(st0>=e)st0=hh(m[1],+m[2],m[3]);
     const dr=/(lun|mar|mie|jue|vie|sab|dom)[a-z]*(?:\s*(?:a|al|-)\s*(lun|mar|mie|jue|vie|sab|dom)[a-z]*)?/g;let d;
-    while((d=dr.exec(seg))){const i=D.indexOf(d[1]),j=d[2]?D.indexOf(d[2]):i;for(let k=i;k<=j;k++)out.push({d:k,s:st0,e})}
+    const ds=[];while((d=dr.exec(seg))){const i=D.indexOf(d[1]),j=d[2]?D.indexOf(d[2]):i;for(let k=i;k<=j;k++)ds.push(k)}
+    const dias=ds.length?ds:prevD;prevD=dias;dias.forEach(k=>out.push({d:k,s:st0,e}));
   }
   return out}
-const tok=s=>String(s==null?'':s).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+const tok=s=>String(s==null?'':s).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);   // solo para correquisitos (NRC numéricos)
+const tokPre=s=>String(s==null?'':s).split(/\s*[,;\/\n]\s*|\s+[yYoO]\s+/).map(x=>x.trim()).filter(x=>x&&!/^[yYoO]$/.test(x));
+const esCod=p=>/^[A-Za-z]{2,6}[- ]?[A-Za-z]*\d+[A-Za-z]?$/.test(p);                     // "Ingreso", "20 UC"… no son prelaciones de materia
 const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
-const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)&&normCode(n)!==normCode(m.cod)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
+const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
 
 /* ---------- carga de archivos ---------- */
 const normM=a=>(a||[]).map(m=>{
@@ -424,7 +432,7 @@ const normM=a=>(a||[]).map(m=>{
     horario,
     profesor,
     det,
-    pre:String(m.pre||m.prelaciones||m.prerrequisitos||''),coreq:tok(m.correquisitos||m.coreq),prel:tok(m.pre||m.prelaciones||m.prerrequisitos),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
+    pre:String(m.pre||m.prelaciones||m.prerrequisitos||''),coreq:tok(m.correquisitos||m.coreq),prel:tokPre(m.pre||m.prelaciones||m.prerrequisitos).filter(esCod),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
   };
 }).filter(m => m.nrc && m.nombre);
 
@@ -432,60 +440,80 @@ function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader()
   r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
   r.readAsText(f,'utf-8')}
 const hash=t=>{let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return String(h)};
-$('fDat').onchange=()=>{leer($('fDat'),t=>{datos=JSON.parse(t);datos._sig=hash(t);aplicar()});$('fDat').value=''};
+const limpiarUndo=()=>{undoSt.length=0;redoSt.length=0};
+const respaldoAuto=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_automatico_horarios.json');
+const hayEstado=()=>Object.keys(st).some(k=>k==='probs'?Object.values(st.probs||{}).some(Boolean):k!=='sig'&&st[k]&&typeof st[k]==='object'&&(st[k].ed||st[k].nota||st[k].listo));
+function cargarDatos(nd){
+  const sg=nd._sig||'';
+  if(st.sig&&sg&&st.sig!==sg&&hayEstado()){
+    if(!confirm('Este data.json es distinto al de la sesión anterior. Si continúas se borrarán los horarios editados, las notas, los «listo» y los checks guardados (antes se descargará un respaldo automático). ¿Continuar?'))return aviso('Carga cancelada: se conservó el estado anterior.');
+    respaldoAuto();st={};
+  }
+  limpiarUndo();datos=nd;aplicar();
+}
+$('fDat').onchange=()=>{leer($('fDat'),t=>{const nd=JSON.parse(t);nd._sig=hash(t);cargarDatos(nd)});$('fDat').value=''};
 
 $('btnResetSt').onclick=()=>{
   if(confirm('¿Restablecer los datos locales? Se perderán los cambios de horario, las notas, los «listo» y los checks de problemas (usa «Respaldo» antes si quieres conservarlos).')){
-    localStorage.removeItem('hr_estado');
-    st = {};
+    try{localStorage.removeItem('hr_estado')}catch(e){}
+    st = {};limpiarUndo();
     aplicar();
     aviso('Memoria local restablecida.');
   }
 };
 
 function aplicar(){
-  if(datos){const sg=datos._sig||'';if(st.sig&&sg&&st.sig!==sg){st={};aviso('Data.json distinto al de la sesión anterior: se reinició el estado local.',true)}if(sg)st.sig=sg}
+  if(datos&&datos._sig)st.sig=datos._sig;
   materias=matsArchivo||(datos?normM(datos.materias):[]);
   if((!materias||!materias.length)&&malla){
     materias=malla.entries.map(e=>({nrc:e.rawCode||e.code,cod:e.rawCode||e.code,nro:e.nro,nombre:e.rawName||e.name,horario:e.hor,profesor:'',det:[e.nro&&'Curso '+e.nro,e.pre&&'Prelaciones: '+e.pre].filter(Boolean).join(' · '),sl:slots(e.hor)}));
   }
-  alumnos=datos?(datos.estudiantes||[]).map(a=>{
-    const ci=String(a.ci),inscritos=a.materias_inscriptas||[];
-    // Sincroniza las materias inscritas directamente desde el data.json recién cargado
-    const pv=st[ci]||{};st[ci]={n:pv.ed?pv.n:[...inscritos],ini:[...inscritos],ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo};
-    return Object.assign({},a,{ci});
-  }):[];
-  reportes=datos?(datos.reportes||[]):[];
-  repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
-  idx1=new Map();idx2=new Map();rcache=new Map();
+  idx1=new Map();idx2=new Map();rcache=new Map();acache=new Map();
   materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
   materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
+  const vistos=new Set();let sinCi=0,dupCi=0;
+  alumnos=datos?(datos.estudiantes||[]).map(a=>{
+    const ci=String(a.ci==null?'':a.ci).trim();
+    if(!ci||ci==='undefined'||ci==='null'){sinCi++;return null}
+    if(vistos.has(ci)){dupCi++;return null}vistos.add(ci);
+    const pv=st[ci]||{},r=canonN(pv.ed?(pv.n||[]).concat(pv.fuera||[]):(a.materias_inscriptas||[]));   // todo a NRC canónico; los que no existen en la oferta van aparte
+    st[ci]={n:r.ok,fuera:r.fuera,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||''};
+    return Object.assign({},a,{ci});
+  }).filter(Boolean):[];
+  reportes=datos?(datos.reportes||[]):[];
+  repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
+  if(sinCi||dupCi)aviso('Se omitieron alumnos: '+sinCi+' sin cédula y '+dupCi+' con cédula repetida.',true);
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
   $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
+  {const R=[['correquisitos',materias.some(m=>(m.coreq||[]).length)],['prelaciones',materias.some(m=>(m.prel||[]).length)&&alumnos.some(a=>a.materias_aprobadas||a.aprobadas)],
+     ['créditos',materias.some(m=>m.cred)&&alumnos.some(a=>a.max_creditos||a.max_uc)],['cupo',materias.some(m=>m.cupo)]];
+   let s=$('reglas');if(!s){s=document.createElement('span');s.id='reglas';s.className='mut';$('estado').after(s)}}
+  mostrarProf();
   guardar();
   renderTodo();
   if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
 }
 
 /* ---------- acciones ---------- */
-const ajustes=(()=>{try{return JSON.parse(localStorage.getItem('hr_ajustes')||'{}')}catch(e){return{}}})();
+const ajustes=Object.assign({undo:true},(()=>{try{return JSON.parse(localStorage.getItem('hr_ajustes')||'{}')}catch(e){return{}}})());
 const undoSt=[],redoSt=[];
 function snap(){undoSt.push({k:sel||'_libre',n:[...get().n]});if(undoSt.length>50)undoSt.shift();redoSt.length=0}
 function viajar(de,a,vacio){const u=de.pop();if(!u)return aviso(vacio,true);
   const c=st[u.k]=st[u.k]||{n:[],nota:'',listo:false};a.push({k:u.k,n:[...c.n]});
-  c.n=u.n;c.ed=true;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
+  c.n=u.n;c.ed=true;c.listo=false;if(profesor)c.prof=profesor;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
 const deshacer=()=>viajar(undoSt,redoSt,'Nada que deshacer.');
 const rehacer=()=>viajar(redoSt,undoSt,'Nada que rehacer.');
 function validar(m,cur,ex){
   ex=ex||[];
   if(!m.sl.length)return 'No se reconoce el horario de «'+m.nombre+'».';
+{const a0=alumnos.find(x=>x.ci===sel),aa0=a0&&(a0.materias_aprobadas||a0.aprobadas);if(Array.isArray(aa0)&&m.cod&&aa0.map(nc).includes(nc(m.cod)))return 'Ya aprobaste «'+m.nombre+'».'}
   const dup=cur.n.map(byNrc).find(o=>o&&o!==m&&normCode(o.nrc)!==normCode(m.nrc)&&(normCode(o.cod)===normCode(m.cod)||nz(o.nombre)===nz(m.nombre)));
   if(dup)return '«'+m.nombre+'» ya está inscrita en otra sección ('+dup.nrc+').';
   const c=conflictosCon(m).concat(ex.filter(o=>choca(o.sl,m.sl)));if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
   const a=alumnos.find(x=>x.ci===sel);
   if(a){
     const aa=a.materias_aprobadas||a.aprobadas;
-    if(Array.isArray(aa)&&m.prel&&m.prel.length){const ap=new Set(aa.map(nc)),f=m.prel.filter(p=>!ap.has(nc(p)));if(f.length)return 'Faltan prelaciones de «'+m.nombre+'»: '+f.join(', ')+'.'}
+        if(Array.isArray(aa)&&m.prel&&m.prel.length){const ap=new Set(aa.map(nc)),f=m.prel.filter(p=>!ap.has(nc(p)));if(f.length)return 'Faltan prelaciones de «'+m.nombre+'»: '+f.join(', ')+'.'}
     const mx=+(a.max_creditos||a.max_uc||0);
     if(mx&&m.cred){const t=cur.n.map(byNrc).concat(ex).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
   }
@@ -511,8 +539,8 @@ function planAgregar(m){
   }
   return add}
 function quitar(m){
-  const cur=get(),A=aprobadasDe(sel),q=[m],fuera=[],tc=normCode(m.nrc),tcod=normCode(m.cod);
-  cur.n=cur.n.filter(x=>normCode(x)!==tc&&normCode(x)!==tcod);
+  const cur=get(),A=aprobadasDe(sel),q=[m],fuera=[],tc=normCode(m.nrc);
+  cur.n=cur.n.filter(x=>normCode(x)!==tc);
   while(q.length){
     const r=q.shift();
     for(const id of [...cur.n]){
@@ -524,8 +552,8 @@ function quitar(m){
 const faltantesDe=ci=>{const c=(st[ci]&&st[ci].n)||[],S=new Set(c.map(normCode)),A=aprobadasDe(ci);return c.map(byNrc).filter(x=>x&&!okReq(x,S,A)).map(x=>x.nombre)};
 function toggle(nrc){
   const m=byNrc(nrc),cur=get();if(!m)return;
-  const tc=normCode(m.nrc),tcod=normCode(m.cod);
-  if(cur.n.some(x=>normCode(x)===tc||normCode(x)===tcod)){
+  const tc=normCode(m.nrc);
+  if(cur.n.some(x=>normCode(x)===tc)){
     if(ajustes.conf&&!confirm('¿Quitar «'+m.nombre+'» del horario?'))return;
     snap();quitar(m);
   }else{
@@ -537,20 +565,21 @@ function toggle(nrc){
     snap();cur.n.push(...add.map(x=>x.nrc));
     if(add.length>1)aviso('Se agregó también: '+add.slice(1).map(x=>x.nombre).join(', ')+'.');
   }
-  cur.ed=true;guardar();renderMaterias();renderHorario();renderAlumnos();
+  cur.ed=true;if(profesor)cur.prof=profesor;if(cur.listo){cur.listo=false;aviso('Cambió el horario: se quitó la marca «listo».',true)}
+  guardar();renderMaterias();renderHorario();renderAlumnos();renderBottom();
 }
 $('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(d.dataset.nrc)};
 $('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(d.dataset.q)};
-$('als').onclick = e => {
+$('als').onchange = e => {
   const chk = e.target.closest('.chk-prob');
-  if (chk) {
-    st.probs = st.probs || {};
-    st.probs[chk.dataset.key] = chk.checked;
-    guardar();
-    renderAlumnos();
-    return;
-  }
-  
+  if (!chk) return;
+  st.probs = st.probs || {};
+  st.probs[chk.dataset.key] = chk.checked;
+  guardar();
+  renderAlumnos();
+};
+$('als').onclick = e => {
+  if (e.target.closest('.rep')) return;      // dentro del reporte actúa el checkbox/label; no se re-renderiza antes
   const d = e.target.closest('.al');
   if (!d) return;
   const ci = d.dataset.ci;
@@ -558,18 +587,18 @@ $('als').onclick = e => {
   sel = ci;
   renderTodo();
 };
-$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;if(c.listo&&!c.nota.trim()){c.listo=false;renderAlumnos();$('btnListo').textContent='Marcar alumno como listo'}guardar();renderPrev()};
+$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;if(profesor)c.prof=profesor;if(c.listo&&!c.nota.trim()){c.listo=false;renderAlumnos();$('btnListo').textContent='Marcar alumno como listo'}guardar();renderPrev()};
 $('btnListo').onclick=()=>{
   const c=get();
   if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
-  if(!c.listo){const f=faltantesDe(sel);if(f.length)return aviso('Faltan correquisitos para: '+f.join(', ')+'.',true)}
-  if(!c.listo){const a=alumnos.find(x=>x.ci===sel);if(a&&pendientesReal(a)>0&&!confirm('Quedan '+pendientesReal(a)+' problema(s) sin marcar como resueltos. ¿Marcar como listo de todos modos?'))return}c.listo=!c.listo;guardar();renderAlumnos();renderBottom();
+  if(!c.listo){const a0=alumnos.find(x=>x.ci===sel),al=a0?alertas(a0):[];if(al.length)return aviso('No se puede marcar listo: '+al.slice(0,3).join(' · ')+(al.length>3?' (+'+(al.length-3)+' más)':'')+'.',true)}
+  if(!c.listo){const a=alumnos.find(x=>x.ci===sel);if(a&&pendientesReal(a)>0&&!confirm('Quedan '+pendientesReal(a)+' problema(s) sin marcar como resueltos. ¿Marcar como listo de todos modos?'))return}c.listo=!c.listo;if(profesor)c.prof=profesor;guardar();;renderAlumnos();renderBottom();
 };
-const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,nota:st[a.ci].nota,nrcs:(st[a.ci].n||[]).join(' '),mats:(st[a.ci].n||[]).map(n=>{const m=byNrc(n);return m?m.nombre+' ('+m.horario+')':n}).join(' | ')}));
+const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,correo:a.correo||a.email||'',prof:st[a.ci].prof||profesor||'',nota:st[a.ci].nota,nrcs:(st[a.ci].n||[]).join(' '),mats:(st[a.ci].n||[]).map(n=>{const m=byNrc(n);return m?m.nombre+' ('+m.horario+')':n}).join(' | ')}));
 $('btnExp').onclick=()=>{
   const L=listos();if(!L.length)return aviso('Marca al menos un alumno como listo.',true);
   const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ').replace(/^([=+\-@])/,"'$1")+'"';
-  const csv='\uFEFFsep=;\r\ncedula;resolucion;nrc_finales;horario_final\r\n'+L.map(x=>q(x.ci)+';'+q(x.nota)+';'+q(x.nrcs)+';'+q(x.mats)).join('\r\n');
+  const csv='\uFEFFsep=;\r\nCI;correo;resolucion;profesor\r\n'+L.map(x=>q(x.ci)+';'+q(x.correo)+';'+q(x.nota)+';'+q(x.prof)).join('\r\n');
   const u=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
   a.href=u;a.download='resoluciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
   aviso('Exportado: '+L.length+' fila(s) → resoluciones.csv (ábrelo con Excel).');
@@ -578,13 +607,13 @@ $('btnExp').onclick=()=>{
 /* ---------- render ---------- */
 function renderMaterias(){
   const cur=get(),A=aprobadasDe(sel),repsSel=reportes.filter(r=>sel&&String(r.ci)===sel);
-  const isInc=m=>cur.n.some(e=>{const k=normCode(e);return normCode(m.nrc)===k||normCode(m.cod)===k});
+  const isInc=m=>cur.n.some(e=>normCode(e)===normCode(m.nrc));
   const getRepStatus=m=>{
     if(!sel)return{isRep:false,allow:true};
     const mc=new Set([m.nrc,m.cod].filter(Boolean).map(normCode));
     const rs=repsSel.filter(r=>mc.has(normCode(r.nrc)));
     if(!rs.length)return{isRep:false,allow:true};
-    const cambio=rs.some(r=>{const t=(String(r.tipo_error||'')+' '+String(r.motivo||'')).toLowerCase();return t.includes('cambio')||t.includes('cruce')||t.includes('choque')||t.includes('horario')||t.includes('seccion')||t.includes('sección')});
+    const cambio=rs.some(r=>typeof r.permite_cambio==='boolean'?r.permite_cambio:/cambio|cruce|choque/.test(norm(r.tipo_error||'')));
     return{isRep:true,allow:cambio}};
   const qq=nz($('qMat').value);
   const vis=materias.filter(m=>(isInc(m)||getRepStatus(m).allow)&&(!qq||nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
@@ -608,7 +637,7 @@ function renderMaterias(){
     if(rp)tag+='<em class="t warn">⚠ reportada</em>';
     if(apr)tag+='<em class="t ok">Aprobada ✓</em>';
     G[k].push(m);
-    H.set(m,'<div class="'+cls+'" data-nrc="'+esc(m.nrc)+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>');
+    H.set(m,'<div class="'+cls+'" data-nrc="'+esc(m.nrc)+'" role="button" tabindex="0" aria-pressed="'+(on?'true':'false')+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>');
   }
   const ord=(a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''))||String(a.nrc).localeCompare(String(b.nrc));
   $('mats').innerHTML=vis.length?SEC.filter(s=>G[s[0]].length).map(s=>{
@@ -618,21 +647,21 @@ function renderMaterias(){
       pv=m.nombre;return gh+H.get(m)}).join('')
   }).join(''):'<p class="mut">No hay materias disponibles para este alumno.</p>';
 }
-let fPerfil = '', fOrden = 'pend', fOcultar = false;
+let fPerfil = '', fOcultar = false;
 const perfilDe = a => a.perfil || 'Alumno';
 const repsDe = a => repBy.get(a.ci) || [];
-function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],out=[],ms=[];
+function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],fu=(st[a.ci]&&st[a.ci].fuera)||[],ck=c.join('|')+'#'+fu.join('|'),h=acache.get(a.ci);if(h&&h.k===ck)return h.v;
+  const out=[],ms=[];fu.forEach(n=>out.push('NRC '+n+' no está en la oferta cargada (no cuenta en el horario)'));
   for(const n of c){const m=byNrc(n);if(!m){out.push('NRC '+n+' no está en la oferta cargada');continue}if(!m.sl.length)out.push('Horario no reconocido: '+m.nombre);ms.push(m)}
   for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
     if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
     if(nz(ms[i].nombre)===nz(ms[j].nombre))out.push('Materia duplicada: '+ms[i].nombre)}
   const S=new Set(c.map(normCode)),A=aprobadasDe(a.ci);ms.filter(x=>!okReq(x,S,A)).forEach(x=>out.push('Falta correquisito/prerrequisito de «'+x.nombre+'»'));
-  return out}
+  acache.set(a.ci,{k:ck,v:out});return out}
 const totalProbs = a => repsDe(a).length;
 const pendientesReal = a => repsDe(a)
   .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
-// Mantiene la prioridad total MIENTRAS exista al menos 1 problema sin resolver.
-// Solo pierde prioridad (pasa a 0) cuando se completan TODOS los checks.
+// Prioridad = total de problemas reportados; pasa a 0 solo cuando el alumno está marcado «listo» (no mira los checks).
 const pendientesOrden = a => (st[a.ci] && st[a.ci].listo) ? 0 : totalProbs(a);
 $('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
 $('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
@@ -647,8 +676,7 @@ function renderAlumnos(){
 
   const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
   const nom = a => String(a.nombre || '');
-  if (fOrden === 'pend') lista.sort((a, b) => pendientesOrden(b) - pendientesOrden(a) || nom(a).localeCompare(nom(b)));
-  else if (fOrden === 'nombre') lista.sort((a, b) => nom(a).localeCompare(nom(b)));
+  lista.sort((a, b) => pendientesOrden(b) - pendientesOrden(a) || nom(a).localeCompare(nom(b)));
   $('fCnt').textContent = alumnos.length
   ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientesReal(a), 0) + ' problema(s) pendiente(s)'
   : '';
@@ -676,7 +704,7 @@ function renderAlumnos(){
       : '<span class="bdg">0</span>';
 
     return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
-      '<div class="who"><b>' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
+      '<div class="who" role="button" tabindex="0" aria-label="Seleccionar alumno"><b>' + (lista.indexOf(a) + 1) + '. ' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
       (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
   }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
                                 : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
@@ -756,7 +784,11 @@ function renderHorario(){
       const leftCss = `calc(${sub * wPct}% + 2px)`;
       const widthCss = `calc(${wPct}% - 3px)`;
 
-      h += '<div class="blk c' + colIdx + '" data-q="' + esc(blk.nrc) + '" title="' + esc(blk.m.nombre) + ' (Clic para quitar)" style="top:' + ((blk.s - h0) * H) + 'px;height:' + ((blk.e - blk.s) * H) + 'px;left:' + leftCss + ';width:' + widthCss + '"><b>' + esc(blk.m.nombre) + '</b><span>' + fmt(blk.s) + '–' + fmt(blk.e) + '</span></div>';
+      h += '<div class="blk c' + colIdx + '" data-q="' + esc(blk.nrc) + '" role="button" tabindex="0" aria-label="Quitar ' + esc(blk.m.nombre) + ' del horario" title="' + esc(blk.m.nombre) + ' (Clic para quitar)" style="top:' + ((blk.s - h0) * H) + 'px;height:' + ((blk.e - blk.s) * H) + 'px;left:' + leftCss + ';width:' + widthCss + '">' +
+      '<b>' + esc(blk.m.nombre) + '</b>' +
+      '<span>' + fmt(blk.s) + '–' + fmt(blk.e) + '</span>' +
+      '<span>NRC: ' + esc(blk.nrc) + '</span>' +
+      '</div>';
     }
 
     h+='</div>';
@@ -765,7 +797,7 @@ function renderHorario(){
 }
 function renderPrev(){
   const L=listos();
-  $('prev').innerHTML=L.length?'<table><tr><th>Cédula</th><th>Resolución</th></tr>'+L.map(x=>'<tr><td>'+esc(x.ci)+'</td><td>'+esc(x.nota)+'</td></tr>').join('')+'</table>':'<p class="mut">Aún no hay alumnos marcados como listos.</p>';
+  $('prev').innerHTML=L.length?'<table><tr><th>CI</th><th>Correo</th><th>Resolución</th><th>Profesor</th></tr>'+L.map(x=>'<tr><td>'+esc(x.ci)+'</td><td>'+esc(x.correo)+'</td><td>'+esc(x.nota)+'</td><td>'+esc(x.prof)+'</td></tr>').join('')+'</table>':'<p class="mut">Aún no hay alumnos marcados como listos.</p>';
 }
 function renderBottom(){
   const a=alumnos.find(x=>x.ci===sel),c=get();
@@ -781,11 +813,15 @@ renderTodo();
 const campo=(r,L)=>{const k=Object.keys(r||{}).find(k=>L.includes(nz(k)));return k?String(r[k]).replace(',','.'):''};
 function materiasFiltradas(){
   const usados=new Set(),ids=new Set(),out=[];let libre=900001;
-  for(const x of aceptadas){
-    const it=x.it,
+  const fus=new Map(),lista=[];
+  for(const x of aceptadas){const it=x.it,nro=String(it.nro||'').trim(),k=nro?normCode(nro)+'|'+normCode(it.rawCode):null,h=String(it.hor||'').trim();
+    if(k&&fus.has(k)){const g=fus.get(k);if(h&&!g.hs.includes(h))g.hs.push(h);continue}
+    const g={x,hs:h?[h]:[]};if(k)fus.set(k,g);lista.push(g)}
+  for(const g of lista){
+    const x=g.x,it=x.it,
           cod=String(it.rawCode||'').trim(),
           nro=String(it.nro||'').trim(),
-          hor=String(it.hor||'').trim(),
+          hor=g.hs.join('; '),
           base=nro||cod, // <-- CAMBIO AQUÍ: Prioriza el número de sección/NRC
           id=base||(libre++);
     const dk=normCode(id)+'|'+nz(hor);if(usados.has(dk))continue;usados.add(dk);
@@ -798,7 +834,7 @@ function materiasFiltradas(){
       horario:hor,
       profesor:'',
       det:[nro&&'Sección/NRC '+nro,it.pre&&'Prelaciones: '+it.pre,it.cor&&'Correquisitos: '+it.cor].filter(Boolean).join(' · '),
-      pre:String(it.pre||''),coreq:tok(it.cor),prel:tok(it.pre),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
+      pre:String(it.pre||''),coreq:tok(it.cor),prel:tokPre(it.pre).filter(esCod),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
       sl:slots(hor)
     });
   }
@@ -809,18 +845,25 @@ function fase(n){
   $('p1').className='step'+(n===1?' on':'');$('p2').className='step'+(n===2?' on':'');
   if(n===2)aplicar();
 }
-$('bGo').onclick=()=>{matsArchivo=materiasFiltradas();fase(2)};
-$('bSkip').onclick=()=>{matsArchivo=null;fase(2)};
+let profesor='';try{profesor=localStorage.getItem('hr_prof')||''}catch(e){}
+if(!$('profNombre')){const c=document.createElement('section');c.className='card';c.innerHTML='<h2>Profesor</h2><label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name" style="font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);min-width:260px"></label>';document.querySelector('.f1main').prepend(c)}
+$('profNombre').value=profesor;
+$('profNombre').oninput=e=>{profesor=e.target.value.trim();try{localStorage.setItem('hr_prof',profesor)}catch(x){}mostrarProf()};
+function mostrarProf(){let s=$('profTag');if(!s){s=document.createElement('span');s.id='profTag';s.className='mut';$('estado').after(s)}s.textContent=' · Profesor: '+(profesor||'(sin nombre)')}
+const hayProf=()=>{if(profesor)return true;aviso('Escribe tu nombre de profesor para continuar.',true);$('profNombre').focus();return false};
+$('bGo').onclick=()=>{if(!hayProf())return;matsArchivo=materiasFiltradas();fase(2)};
+$('bSkip').onclick=()=>{if(!hayProf())return;matsArchivo=null;fase(2)};
 $('volver').onclick=()=>fase(1);
 renderFiltro();fase(1);
 $('btnMinBot').onclick=()=>{
   const b=$('botPanel');
   const min=b.classList.toggle('min');
   $('btnMinBot').textContent=min?'▲ Mostrar panel':'─ Minimizar';
-  setTimeout(renderHorario, 50); // Recalcula la altura del horario al minimizar/expandir
 };
 // También recalcula el horario si la ventana cambia de tamaño
-window.addEventListener('resize', renderHorario);
+if(window.ResizeObserver){let rw=0,rh=0,raf=0;                                           // recalcula el horario solo si el panel cambia de tamaño
+  new ResizeObserver(es=>{const r=es[0].contentRect;if(Math.abs(r.width-rw)<2&&Math.abs(r.height-rh)<2)return;rw=r.width;rh=r.height;cancelAnimationFrame(raf);raf=requestAnimationFrame(renderHorario)}).observe($('hor'))}
+else addEventListener('resize',renderHorario);
 $('qMat').oninput=renderMaterias;
 function aplicarAj(){$('btnUndo').hidden=!ajustes.undo;document.body.classList.toggle('big',!!ajustes.big);$('btnRedo').hidden=!ajustes.undo;}
 [['aConf','conf'],['aUndo','undo'],['aBig','big']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
@@ -831,7 +874,77 @@ document.addEventListener('keydown',e=>{if(ajustes.undo&&(e.ctrlKey||e.metaKey)&
 $('btnPrint').onclick=()=>window.print();
 $('btnResp').onclick=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_horarios.json');
 $('btnRest').onclick=()=>$('fResp').click();
-$('fResp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o||typeof o!=='object')throw 0;st=o;guardar();aplicar();aviso('Respaldo restaurado.')}catch(x){aviso('Respaldo inválido.',true)}});e.target.value=''};
+$('fResp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o||typeof o!=='object')throw 0;if(o.sig&&datos&&datos._sig&&o.sig!==datos._sig&&!confirm('Este respaldo se hizo con otro data.json. ¿Restaurarlo de todos modos?'))return aviso('Restauración cancelada.');if(hayEstado()){if(!confirm('Restaurar reemplaza el estado actual (se descargará un respaldo automático). ¿Continuar?'))return aviso('Restauración cancelada.');respaldoAuto()}st=o;limpiarUndo();guardar();aplicar();aviso('Respaldo restaurado.')}catch(x){aviso('Respaldo inválido.',true)}});e.target.value=''};
+
+/* ---------- accesibilidad ---------- */
+$('aviso').setAttribute('role','status');$('aviso').setAttribute('aria-live','polite');
+$('qMat').setAttribute('aria-label','Buscar materia por nombre, código o día');
+document.addEventListener('keydown',e=>{      // Enter / Espacio activan materias, bloques y alumnos; el foco vuelve a la materia tras re-dibujar
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('.mat,.blk,.who')){
+    e.preventDefault();const k=e.target.dataset.nrc;e.target.click();
+    if(k){const n=[...document.querySelectorAll('#mats .mat')].find(x=>x.dataset.nrc===k);if(n)n.focus()}
+  }});
+{const s=document.createElement('style');           // impresión: nombre y cédula del alumno + colores
+ s.textContent='#printHdr{display:none}@media print{#printHdr{display:block!important;font:600 16px system-ui;margin:0 0 8px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+ document.head.appendChild(s);
+ const h=document.createElement('div');h.id='printHdr';document.body.prepend(h);
+ addEventListener('beforeprint',()=>{const a=alumnos.find(x=>x.ci===sel);h.textContent=a?'Horario de '+a.nombre+' · C.I. '+a.ci:'Horario'})}
+/* ---------- gráficas de torta (3 menús) ---------- */
+{
+  const COL=['#3b6ef5','#12a37f','#f59e0b','#e5484d','#8e4ec6','#0ea5b7','#d6409f','#6b7280'];
+  const MENUS=[['listos','1 · Alumnos listos y pendientes'],['tipos','2 · Problemas recurrentes'],['mats','3 · Materias afectadas']];
+  let actual='listos';
+  const mayores=(mapa,n)=>{const a=[...mapa.entries()].sort((x,y)=>y[1]-x[1]),r=a.slice(0,n),o=a.slice(n).reduce((s,x)=>s+x[1],0);if(o)r.push(['Otros',o]);return r};
+  const cuenta=(mapa,k)=>mapa.set(k,(mapa.get(k)||0)+1);
+  const reportesDe=solo=>{const out=[];alumnos.forEach(a=>repsDe(a).forEach((r,i)=>{if(!(solo&&(st.probs||{})[a.ci+'_'+r.nrc+'_'+i]))out.push(r)}));return out};
+  const FUENTES={
+    listos:()=>{const l=alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).length;return{rows:[['Listos',l],['Pendientes',alumnos.length-l]],unidad:'alumnos'}},
+    tipos:solo=>{const m=new Map(),et=new Map();reportesDe(solo).forEach(r=>{const t=String(r.tipo_error||'Sin tipo').trim(),k=norm(t);if(!et.has(k))et.set(k,t);cuenta(m,k)});
+      return{rows:mayores(m,7).map(([k,v])=>[et.get(k)||k,v]),unidad:'reportes'}},
+    mats:solo=>{const m=new Map();reportesDe(solo).forEach(r=>{const x=byNrc(r.nrc);cuenta(m,x?x.nombre:'NRC '+r.nrc)});return{rows:mayores(m,7),unidad:'reportes'}}
+  };
+  function torta(rows){
+    const R=rows.filter(r=>r[1]>0),tot=R.reduce((s,r)=>s+r[1],0);
+    if(!tot)return '<p class="mut">No hay datos para graficar.</p>';
+    let ang=-Math.PI/2,svg='<svg viewBox="-1.05 -1.05 2.1 2.1" width="240" height="240" role="img" aria-label="Gráfica de torta">',ley='';
+    R.forEach(([n,v],i)=>{
+      const f=v/tot,fin=ang+f*2*Math.PI,c=n==='Otros'?'#9aa3b2':COL[i%COL.length],tip=esc(n)+': '+v+' ('+Math.round(f*100)+'%)';
+      svg+=f>.9999?'<circle r="1" fill="'+c+'"><title>'+tip+'</title></circle>'
+        :'<path d="M0 0L'+Math.cos(ang)+' '+Math.sin(ang)+'A1 1 0 '+(f>.5?1:0)+' 1 '+Math.cos(fin)+' '+Math.sin(fin)+'Z" fill="'+c+'" stroke="var(--pn)" stroke-width=".02"><title>'+tip+'</title></path>';
+      ley+='<li><i style="background:'+c+'"></i><span>'+esc(n)+'</span><b>'+v+'</b><small>'+Math.round(f*100)+'%</small></li>';
+      ang=fin;
+    });
+    return '<div class="gf-fig">'+svg+'</svg><ul class="gf-ley">'+ley+'</ul></div>';
+  }
+  const dlg=document.createElement('dialog');dlg.id='dlgGraf';
+  dlg.innerHTML='<div class="gf-h"><b>Gráficas</b><button type="button" id="gfX" aria-label="Cerrar">✕</button></div>'+
+    '<div class="gf-tabs" role="tablist">'+MENUS.map(([k,t])=>'<button type="button" role="tab" data-g="'+k+'">'+t+'</button>').join('')+'</div>'+
+    '<label class="gf-s" id="gfSoloL"><input type="checkbox" id="gfSolo"> Solo problemas sin resolver</label><div id="gfCuerpo"></div>';
+  document.body.appendChild(dlg);
+  const pintar=()=>{
+    dlg.querySelectorAll('[data-g]').forEach(b=>{const on=b.dataset.g===actual;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+    $('gfSoloL').hidden=actual==='listos';
+    const f=FUENTES[actual]($('gfSolo').checked),tot=f.rows.reduce((s,r)=>s+r[1],0);
+    $('gfCuerpo').innerHTML='<p class="mut" style="margin:6px 0">Total: '+tot+' '+f.unidad+'</p>'+torta(f.rows);
+  };
+  dlg.addEventListener('click',e=>{
+    const b=e.target.closest('[data-g]');if(b){actual=b.dataset.g;pintar()}
+    if(e.target.id==='gfX'||e.target===dlg)dlg.close?dlg.close():dlg.removeAttribute('open');
+  });
+  $('gfSolo').onchange=pintar;
+  const bt=document.createElement('button');bt.id='btnGraf';bt.type='button';bt.className=$('btnPrint').className;bt.textContent='📊 Gráficas';
+  $('btnPrint').after(bt);
+  bt.onclick=()=>{pintar();dlg.showModal?dlg.showModal():dlg.setAttribute('open','')};
+  const s=document.createElement('style');
+  s.textContent='#dlgGraf{border:1px solid var(--bd);border-radius:12px;background:var(--pn);color:var(--tx);padding:14px 16px;width:min(560px,94vw)}#dlgGraf::backdrop{background:#0006}'+
+    '.gf-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.gf-h button{border:0;background:none;color:var(--tx);font-size:18px;cursor:pointer}'+
+    '.gf-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.gf-tabs button{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:8px;padding:5px 10px;cursor:pointer;font:inherit}'+
+    '.gf-tabs button.on{background:var(--acs);border-color:var(--ac);color:var(--ac);font-weight:600}.gf-s{font-size:13px;color:var(--mut)}'+
+    '.gf-fig{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:8px}.gf-ley{list-style:none;margin:0;padding:0;flex:1;min-width:180px;font-size:13px}'+
+    '.gf-ley li{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--bd)}.gf-ley i{width:12px;height:12px;border-radius:3px;flex:none}'+
+    '.gf-ley span{flex:1}.gf-ley small{color:var(--mut);min-width:34px;text-align:right}@media print{#dlgGraf,#btnGraf{display:none!important}}';
+  document.head.appendChild(s);
+}
 </script>
 </body>
 </html>
