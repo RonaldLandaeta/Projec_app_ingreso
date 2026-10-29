@@ -39,7 +39,7 @@ MATERIAS_EJEMPLO = [
 @dataclass
 class Materia:
     nombre: str
-    nrc: int                                    # máximo 5 dígitos
+    nrc: int                                    
     horario: str                                # contiene día/s y hora/s
     profesor: str
     prerrequisitos: list = field(default_factory=list)   # NRC que debes ver ANTES
