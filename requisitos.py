@@ -7,13 +7,15 @@ ARCHIVO = "datos.json"
 PERFILES = ["Alumno", "Beca trabajo", "Deportista", "Ayudante especial"]
 PROFESOR = "Profesor"
 
-# ---------- tipos de error ----------
-TIPO_INSCRIBIR = "No pude inscribir"
-TIPO_HORARIO = "Cambio de horario"
-TIPOS_ERROR = [TIPO_INSCRIBIR, TIPO_HORARIO]
-
-MOTIVO_PRERREQ = "Prerrequisito"     # debes ver una materia ANTES
-MOTIVO_COREQ = "Correquisito"        # debes ver 2 materias AL MISMO TIEMPO
+# ---------- tipos de error (mismos que Page_reports: lib/catalogos.ts) ----------
+TIPO_PRERREQ = "Error de prerrequisito"   # debes ver una materia ANTES
+TIPO_COREQ = "Error de correquisito"      # debes ver 2 materias AL MISMO TIEMPO
+TIPO_RESERVA = "Reserva cerrada"
+TIPO_CRUCE = "Cruce de horario"
+TIPO_CAMBIO = "Cambio de horario"
+TIPO_OTROS = "Otros"                      # exige un detalle (máx. 100 caracteres)
+TIPOS_ERROR = [TIPO_PRERREQ, TIPO_COREQ, TIPO_RESERVA, TIPO_CRUCE, TIPO_CAMBIO, TIPO_OTROS]
+DETALLE_MAX = 100
 
 # (nrc, nombre, horario, profesor, prerrequisitos, correquisitos)
 MATERIAS_EJEMPLO = [
@@ -49,7 +51,7 @@ class Materia:
 @dataclass
 class Problema:
     tipo_error: str
-    motivo: str = ""                            # solo para "No pude inscribir"
+    motivo: str = ""                            # solo para "Otros" (detalle del error)
     cantidad_problemas: int = 0                 # veces que fue reportado
     nrcs_afectados: set = field(default_factory=set)
     reportes_por_perfil: dict = field(default_factory=dict)
@@ -83,13 +85,11 @@ class Estudiante:
             return False
 
         relacionadas = []
-        if tipo_error == TIPO_INSCRIBIR:
-            if motivo == MOTIVO_PRERREQ:
-                relacionadas = materia.prerrequisitos
-            elif motivo == MOTIVO_COREQ:
-                relacionadas = materia.correquisitos
+        if tipo_error in (TIPO_PRERREQ, TIPO_COREQ):
+            relacionadas = materia.prerrequisitos if tipo_error == TIPO_PRERREQ else materia.correquisitos
             if not relacionadas:
-                print(f"  ! {materia.nombre} no tiene {motivo.lower()}s registrados.")
+                requisito = "prerrequisitos" if tipo_error == TIPO_PRERREQ else "correquisitos"
+                print(f"  ! {materia.nombre} no tiene {requisito} registrados.")
                 return False
 
         nuevo = Problema(tipo_error, motivo)
@@ -175,17 +175,13 @@ class Sistema:
         return est
 
     # ---------- paso 2: reportar problema ----------
-    def pedir_motivo(self) -> str:
-        print("¿Por qué no pudiste inscribir?")
-        print("  1. Prerrequisito (me falta ver una materia antes)")
-        print("  2. Correquisito (debo inscribir otra materia al mismo tiempo)")
+    def pedir_detalle(self) -> str:
+        """Para el tipo «Otros»: el detalle es obligatorio y de máximo DETALLE_MAX caracteres."""
         while True:
-            op = input("> ").strip()
-            if op == "1":
-                return MOTIVO_PRERREQ
-            if op == "2":
-                return MOTIVO_COREQ
-            print("  ! Elige 1 o 2.")
+            detalle = input(f"Especifica el error (máx. {DETALLE_MAX} caracteres): ").strip()
+            if detalle and len(detalle) <= DETALLE_MAX:
+                return detalle
+            print(f"  ! El detalle es obligatorio y de máximo {DETALLE_MAX} caracteres.")
 
     def reportar(self, est: Estudiante):
         print("\n--- REPORTAR PROBLEMA ---")
@@ -197,15 +193,13 @@ class Sistema:
         print("Tipo de error:")
         for i, t in enumerate(TIPOS_ERROR, 1):
             print(f"  {i}. {t}")
-        print(f"  {len(TIPOS_ERROR) + 1}. Otro")
-        op = input("> ").strip()
-        motivo = ""
-        if op.isdigit() and 1 <= int(op) <= len(TIPOS_ERROR):
-            tipo = TIPOS_ERROR[int(op) - 1]
-            if tipo == TIPO_INSCRIBIR:
-                motivo = self.pedir_motivo()
-        else:
-            tipo = input("Describe el tipo de error: ").strip() or "Otro"
+        while True:
+            op = input("> ").strip()
+            if op.isdigit() and 1 <= int(op) <= len(TIPOS_ERROR):
+                break
+            print(f"  ! Elige un número del 1 al {len(TIPOS_ERROR)}.")
+        tipo = TIPOS_ERROR[int(op) - 1]
+        motivo = self.pedir_detalle() if tipo == TIPO_OTROS else ""
         if est.reportar_problema(self, tipo, nrc, motivo):
             self.guardar(silencioso=True)       # queda guardado para el reporte del profesor
 

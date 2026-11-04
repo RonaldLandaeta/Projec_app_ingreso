@@ -135,6 +135,7 @@ body.big{font-size:17px}
 <div id="fase2" hidden>
 <header>
   <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
+  <label class="load" title="Archivo con solo cédula y materias inscritas (virtual). Se vincula por cédula con los alumnos de los reportes.">Detalles de inscripción<input type="file" id="fIns" accept=".xlsx,.csv,.json,.txt"></label>
   <button class="b s" id="btnResetSt" style="font-size:12px;padding:4px 8px" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
   <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Permitir deshacer (botón y Ctrl+Z)</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
@@ -379,7 +380,7 @@ $('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Mat
 const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
 const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const pad=n=>String(n).padStart(2,'0'),fmt=h=>pad(Math.floor(h))+':'+pad(Math.round((h%1)*60));
-let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm;
+let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm,insc=null,inscStats=null;
 const abiertos=new Set();
 try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
 let gt=0;const guardarYa=()=>{clearTimeout(gt);gt=0;try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
@@ -394,6 +395,16 @@ const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):nu
 function canonN(arr){const ok=[],fuera=[],seen=new Set();for(const n of arr||[]){const s=String(n).trim(),m=byNrc(s),v=m?m.nrc:s,k=normCode(v);if(!k||seen.has(k))continue;seen.add(k);(m?ok:fuera).push(v)}return{ok,fuera}}
 
 const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
+/* Tipos de error de Page_reports (mismo catálogo que lib/catalogos.ts). Solo los de TIPOS_CAMBIO permiten
+   ofrecer otra sección de la materia reportada; con el resto la materia queda bloqueada hasta resolver el reporte. */
+const TIPOS_ERROR=['Error de prerrequisito','Error de correquisito','Reserva cerrada','Cruce de horario','Cambio de horario','Otros'];
+const TIPOS_CAMBIO=['cruce de horario','cambio de horario'];
+const permiteCambio=r=>typeof r.permite_cambio==='boolean'?r.permite_cambio:(TIPOS_CAMBIO.includes(norm(r.tipo_error||'').trim())||/cambio|cruce|choque/.test(norm(r.tipo_error||'')));
+/* El Nro_Curso se repite entre carreras (02002 existe en FING, MECA y TELE): si el reporte trae el código
+   único de la materia (cod) se enlaza por código; solo sin cod se usa el NRC (archivos antiguos). */
+const matDe=r=>r.cod?byNrc(r.cod):byNrc(r.nrc);
+const repEsDe=(r,m)=>r.cod?normCode(r.cod)===normCode(m.cod):[m.nrc,m.cod].filter(Boolean).map(normCode).includes(normCode(r.nrc));
+const nomRep=r=>{const m=matDe(r);return m?'['+m.nrc+'] '+m.nombre:(r.materia?r.materia+' (no está en la oferta cargada)':'NRC '+r.nrc)};
 
 function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
 
@@ -451,7 +462,101 @@ function cargarDatos(nd){
   }
   limpiarUndo();datos=nd;aplicar();
 }
-$('fDat').onchange=()=>{leer($('fDat'),t=>{const nd=JSON.parse(t);nd._sig=hash(t);cargarDatos(nd)});$('fDat').value=''};
+$('fDat').onchange=()=>{leer($('fDat'),t=>{const nd=JSON.parse(t);nd._sig=hash(t);cargarDatos(nd);if(insc&&datos===nd)resumenInsc()});$('fDat').value=''};
+
+/* ---------- detalles de inscripción: solo cédula + materias inscritas (virtual) ----------
+   Formatos aceptados (.xlsx, .csv, .json), una fila por materia o una fila por alumno con varias:
+     Cedula;Codigo            Cedula;Nro_Curso           Cedula;Materia           Cedula;Materias inscritas
+   Cada materia se puede identificar por código, NRC / Nro_Curso o nombre (si hay varios datos, se usan para desambiguar). */
+const KCI=['CI','C I','CEDULA','CEDULA DE IDENTIDAD','DOCUMENTO','DOCUMENTO DE IDENTIDAD','IDENTIFICACION','NRO DOCUMENTO','NUMERO DE DOCUMENTO'],
+      KMAT=['MATERIA','NOMBRE MATERIA','NOMBRE DE MATERIA','NOMBRE DE LA MATERIA','ASIGNATURA'],
+      KLST=['MATERIAS INSCRITAS','MATERIAS INSCRIPTAS','MATERIAS','INSCRITAS','INSCRIPTAS','ASIGNATURAS','ASIGNATURAS INSCRITAS','CURSOS','CURSOS INSCRITOS','NRC INSCRITOS'];
+const ciKey=s=>{const raw=String(s==null?'':s).trim(),d=raw.replace(/\D/g,'');return d||raw.toUpperCase()};   // "V-28.123.456" == "28123456"
+const pareceCod=x=>/^[A-Za-z]{0,6}[- ]?\d+[A-Za-z]?$/.test(x.trim());
+function partirLista(v){
+  const s=String(v==null?'':v).trim();if(!s)return[];
+  let a=s.split(/\s*[;|\n]\s*/).map(x=>x.trim()).filter(Boolean);
+  if(a.length===1&&a[0].includes(',')){const b=a[0].split(/\s*,\s*/).filter(Boolean);if(b.every(pareceCod))a=b}   // las comas solo separan códigos/NRC (los nombres pueden llevar comas)
+  return a}
+function jrowsIns(j){
+  const cel=v=>Array.isArray(v)?v.map(x=>x&&typeof x==='object'?(x.cod||x.codigo||x.nrc||x.nro||x.nro_curso||x.nombre||x.materia||''):x).join(' ; '):(v&&typeof v==='object'?JSON.stringify(v):v);
+  const fl=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,cel(v)]));
+  if(Array.isArray(j))return j.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(fl);
+  if(j&&typeof j==='object'){
+    const ks=Object.keys(j);
+    if(ks.length&&ks.every(k=>/\d/.test(k)&&(Array.isArray(j[k])||typeof j[k]==='string')))return ks.map(k=>({ci:k,materias:cel(j[k])}));      // {"28123456":["FING-02002",…]}
+    for(const k of ks)if(Array.isArray(j[k])&&j[k].length&&j[k][0]&&typeof j[k][0]==='object')return jrowsIns(j[k])}
+  return[]}
+async function parsearInsc(nombre,dato){
+  if(dato==null)throw new Error('no se pudo leer el archivo');
+  if(/\.xls$/i.test(nombre))throw new Error('formato .xls antiguo: guárdalo como .xlsx o .csv');
+  if(!/\.(csv|json|txt|xlsx)$/i.test(nombre))throw new Error('formato no admitido (usa .xlsx, .csv o .json)');
+  let rows;
+  if(/\.xlsx$/i.test(nombre))rows=await xlsxRows(dato);
+  else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrowsIns(JSON.parse(dato.replace(/^\uFEFF/,'')));
+  else rows=csv(dato);
+  if(!rows.length)throw new Error('no se encontraron filas');
+  const keys=[...new Set(rows.slice(0,300).flatMap(r=>Object.keys(r)))],
+        ci=columna(keys,KCI,false);
+  if(!ci)throw new Error('no hay columna de cédula (Cedula, CI…)');
+  const rest=keys.filter(k=>k!==ci),
+        lst=columna(rest,KLST,false),
+        cod=columna(rest.filter(k=>k!==lst),KC,false),
+        nro=columna(rest.filter(k=>k!==lst&&k!==cod),KNRO,false),
+        nom=columna(rest.filter(k=>k!==lst&&k!==cod&&k!==nro),KMAT,true);
+  if(!lst&&!cod&&!nro&&!nom)throw new Error('no hay columna de materias inscritas (código, NRC / Nro_Curso, materia o «Materias inscritas»)');
+  const porCi=new Map();let sinCi=0,filas=0;
+  for(const r of rows){
+    const k=ciKey(r[ci]);if(!k){sinCi++;continue}
+    const es=porCi.get(k)||[];
+    const e0={cod:cod?String(r[cod]||'').trim():'',nro:nro?String(r[nro]||'').trim():'',nom:nom?String(r[nom]||'').trim():'',tok:''};
+    if(e0.cod||e0.nro||e0.nom)es.push(e0);
+    if(lst)partirLista(r[lst]).forEach(tk=>es.push({cod:'',nro:'',nom:'',tok:tk}));
+    porCi.set(k,es);filas++}
+  if(!porCi.size)throw new Error('ninguna fila trae cédula');
+  return{porCi,filas,sinCi,cols:{ci,lst,cod,nro,nom}}}
+
+/* una materia inscrita -> sección de la oferta cargada; sin adivinar: si hay varias secciones con distinto horario es ambigua */
+function resolverUna(e){
+  const nk=normCode,cod=e.cod&&nk(e.cod),nro=e.nro&&nk(e.nro),nom=e.nom&&nz(e.nom),tok=e.tok&&nk(e.tok),tokN=e.tok&&nz(e.tok);
+  const porCod=k=>materias.filter(m=>nk(m.cod)===k||nk(m.nrc)===k);
+  let c=[];
+  if(cod)c=porCod(cod);
+  if(!c.length&&tok)c=porCod(tok);
+  if(!c.length&&nro)c=materias.filter(m=>nk(m.nrc)===nro||nk(m.nro)===nro);
+  if(!c.length&&(nom||tokN))c=materias.filter(m=>nz(m.nombre)===(nom||tokN));
+  const afinar=f=>{const x=c.filter(f);if(x.length)c=x};
+  if(c.length>1&&nro)afinar(m=>nk(m.nrc)===nro||nk(m.nro)===nro);
+  if(c.length>1&&cod)afinar(m=>nk(m.cod)===cod);
+  if(c.length>1&&nom)afinar(m=>nz(m.nombre)===nom);
+  if(!c.length)return{falta:true};
+  if(c.length>1&&new Set(c.map(m=>nz(m.horario))).size>1)return{amb:true};
+  return{m:c[0]}}
+function resolverInsc(es){
+  const ok=[],fuera=[],amb=[],visto=new Set();
+  for(const e of es){
+    const lab=e.cod||e.nro||e.nom||e.tok,x=resolverUna(e);
+    if(x.m){if(!visto.has(x.m.nrc)){visto.add(x.m.nrc);ok.push(x.m.nrc)}}
+    else if(x.amb){if(!amb.includes(lab))amb.push(lab)}
+    else if(!fuera.includes(lab))fuera.push(lab)}
+  return{ok,fuera,amb}}
+function resumenInsc(){
+  if(!insc)return;
+  if(!datos){aviso('Archivo «'+insc.nombre+'» leído: '+insc.porCi.size+' cédula(s). Carga el data.json de reportes para vincularlas.');return}
+  const s=inscStats,extra=[...insc.porCi.keys()].filter(k=>!s.keys.has(k)).length;
+  let m='Inscripciones: '+s.vinc+' de '+alumnos.length+' alumno(s) vinculados · '+s.mats+' materia(s) en horario';
+  if(s.sinIns)m+=' · '+s.sinIns+' sin inscripción en el archivo';
+  if(extra)m+=' · '+extra+' cédula(s) del archivo sin reporte (ignoradas)';
+  if(s.ed)m+=' · '+s.ed+' con horario editado (se conserva)';
+  if(s.noRes)m+=' · ⚠ '+s.noRes+' materia(s) sin resolver (revisa las alertas del alumno)';
+  if(!materias.length)m='⚠ No hay oferta de materias cargada: no se puede armar el horario. '+m;
+  aviso(m,!!s.noRes||!materias.length)}
+$('fIns').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let d=null;try{d=/\.xlsx$/i.test(f.name)?await f.arrayBuffer():await leerTexto(f)}catch(x){}
+  try{const p=await parsearInsc(f.name,d);insc=Object.assign({nombre:f.name},p);aplicar();resumenInsc()}
+  catch(x){aviso('No se pudo leer «'+f.name+'»: '+x.message,true)}};
+
 
 $('btnResetSt').onclick=()=>{
   if(confirm('¿Restablecer los datos locales? Se perderán los cambios de horario, las notas, los «listo» y los checks de problemas (usa «Respaldo» antes si quieres conservarlos).')){
@@ -472,19 +577,25 @@ function aplicar(){
   materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
   materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
   const vistos=new Set();let sinCi=0,dupCi=0;
+  inscStats={vinc:0,mats:0,sinIns:0,noRes:0,ed:0,keys:new Set()};
   alumnos=datos?(datos.estudiantes||[]).map(a=>{
     const ci=String(a.ci==null?'':a.ci).trim();
     if(!ci||ci==='undefined'||ci==='null'){sinCi++;return null}
     if(vistos.has(ci)){dupCi++;return null}vistos.add(ci);
-    const pv=st[ci]||{},r=canonN(pv.ed?(pv.n||[]).concat(pv.fuera||[]):(a.materias_inscriptas||[]));   // todo a NRC canónico; los que no existen en la oferta van aparte
-    st[ci]={n:r.ok,fuera:r.fuera,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||''};
+    const pv=st[ci]||{},ins=insc&&insc.porCi.get(ciKey(ci));
+    let r,amb=[];                                                  // todo a NRC canónico; los que no existen en la oferta van aparte
+    if(pv.ed){r=canonN((pv.n||[]).concat(pv.fuera||[]));amb=pv.amb||[];if(ins)inscStats.ed++}   // el horario editado a mano manda sobre el archivo
+    else if(ins){const x=resolverInsc(ins);r={ok:x.ok,fuera:x.fuera};amb=x.amb;inscStats.vinc++;inscStats.mats+=x.ok.length;inscStats.noRes+=x.fuera.length+x.amb.length}
+    else{r=canonN(a.materias_inscriptas||[]);if(insc)inscStats.sinIns++}
+    if(insc)inscStats.keys.add(ciKey(ci));
+    st[ci]={n:r.ok,fuera:r.fuera,amb,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||''};
     return Object.assign({},a,{ci});
   }).filter(Boolean):[];
   reportes=datos?(datos.reportes||[]):[];
   repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
   if(sinCi||dupCi)aviso('Se omitieron alumnos: '+sinCi+' sin cédula y '+dupCi+' con cédula repetida.',true);
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
-  $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes';
+  $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes'+(insc?' · inscripción: '+inscStats.vinc+'/'+alumnos.length+' vinculados':'');
   {const R=[['correquisitos',materias.some(m=>(m.coreq||[]).length)],['prelaciones',materias.some(m=>(m.prel||[]).length)&&alumnos.some(a=>a.materias_aprobadas||a.aprobadas)],
      ['créditos',materias.some(m=>m.cred)&&alumnos.some(a=>a.max_creditos||a.max_uc)],['cupo',materias.some(m=>m.cupo)]];
    let s=$('reglas');if(!s){s=document.createElement('span');s.id='reglas';s.className='mut';$('estado').after(s)}}
@@ -610,11 +721,9 @@ function renderMaterias(){
   const isInc=m=>cur.n.some(e=>normCode(e)===normCode(m.nrc));
   const getRepStatus=m=>{
     if(!sel)return{isRep:false,allow:true};
-    const mc=new Set([m.nrc,m.cod].filter(Boolean).map(normCode));
-    const rs=repsSel.filter(r=>mc.has(normCode(r.nrc)));
+    const rs=repsSel.filter(r=>repEsDe(r,m));
     if(!rs.length)return{isRep:false,allow:true};
-    const cambio=rs.some(r=>typeof r.permite_cambio==='boolean'?r.permite_cambio:/cambio|cruce|choque/.test(norm(r.tipo_error||'')));
-    return{isRep:true,allow:cambio}};
+    return{isRep:true,allow:rs.some(permiteCambio)}};
   const qq=nz($('qMat').value);
   const vis=materias.filter(m=>(isInc(m)||getRepStatus(m).allow)&&(!qq||nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
   const ctx=materias.filter(m=>isInc(m)||getRepStatus(m).isRep);          // las que "piden" requisitos: en horario o reportadas
@@ -650,8 +759,8 @@ function renderMaterias(){
 let fPerfil = '', fOcultar = false;
 const perfilDe = a => a.perfil || 'Alumno';
 const repsDe = a => repBy.get(a.ci) || [];
-function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],fu=(st[a.ci]&&st[a.ci].fuera)||[],ck=c.join('|')+'#'+fu.join('|'),h=acache.get(a.ci);if(h&&h.k===ck)return h.v;
-  const out=[],ms=[];fu.forEach(n=>out.push('NRC '+n+' no está en la oferta cargada (no cuenta en el horario)'));
+function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],fu=(st[a.ci]&&st[a.ci].fuera)||[],am=(st[a.ci]&&st[a.ci].amb)||[],ck=c.join('|')+'#'+fu.join('|')+'#'+am.join('|'),h=acache.get(a.ci);if(h&&h.k===ck)return h.v;
+  const out=[],ms=[];fu.forEach(n=>out.push('NRC '+n+' no está en la oferta cargada (no cuenta en el horario)'));am.forEach(n=>out.push('«'+n+'» tiene varias secciones con distinto horario: el archivo de inscripción debe traer el NRC (no cuenta en el horario)'));
   for(const n of c){const m=byNrc(n);if(!m){out.push('NRC '+n+' no está en la oferta cargada');continue}if(!m.sl.length)out.push('Horario no reconocido: '+m.nombre);ms.push(m)}
   for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
     if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
@@ -685,14 +794,13 @@ function renderAlumnos(){
     let det = '';
     if (op) {
       det = '<div class="rep">' + (al.length ? '<ul>' + al.map(x => '<li class="err">⚠ ' + esc(x) + '</li>').join('') + '</ul>' : '') + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
-        const m = byNrc(r.nrc);
         const key = a.ci + '_' + r.nrc + '_' + i;
         const ok = !!st.probs[key];
         return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
                '<input type="checkbox" class="chk-prob" data-key="' + esc(key) + '" ' + (ok ? 'checked' : '') + '> ' +
                '<div><b style="' + (ok ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + esc(r.tipo_error) + (r.motivo ? ' · ' + esc(r.motivo) : '') + '</b>' +
                (ok ? ' <span style="color:var(--ok);font-size:11px;font-weight:bold">✓ Resuelto</span>' : '') +
-               '<br><small>' + (m ? '[' + esc(m.nrc) + '] ' + esc(m.nombre) : 'NRC ' + esc(r.nrc)) + '</small></div>' +
+               '<br><small>' + esc(nomRep(r)) + (r.horario ? ' · ' + esc(r.horario) : '') + '</small></div>' +
                '</label></li>';
       }).join('') + '</ul>'
       : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
@@ -704,7 +812,7 @@ function renderAlumnos(){
       : '<span class="bdg">0</span>';
 
     return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
-      '<div class="who" role="button" tabindex="0" aria-label="Seleccionar alumno"><b>' + (lista.indexOf(a) + 1) + '. ' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + '</small></div>' +
+      '<div class="who" role="button" tabindex="0" aria-label="Seleccionar alumno"><b>' + (lista.indexOf(a) + 1) + '. ' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + (insc ? (insc.porCi.has(ciKey(a.ci)) ? ' · ' + (s ? s.n.length : 0) + ' inscritas' : ' · sin inscripción') : '') + '</small></div>' +
       (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
   }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
                                 : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
@@ -901,7 +1009,7 @@ document.addEventListener('keydown',e=>{      // Enter / Espacio activan materia
     listos:()=>{const l=alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).length;return{rows:[['Listos',l],['Pendientes',alumnos.length-l]],unidad:'alumnos'}},
     tipos:solo=>{const m=new Map(),et=new Map();reportesDe(solo).forEach(r=>{const t=String(r.tipo_error||'Sin tipo').trim(),k=norm(t);if(!et.has(k))et.set(k,t);cuenta(m,k)});
       return{rows:mayores(m,7).map(([k,v])=>[et.get(k)||k,v]),unidad:'reportes'}},
-    mats:solo=>{const m=new Map();reportesDe(solo).forEach(r=>{const x=byNrc(r.nrc);cuenta(m,x?x.nombre:'NRC '+r.nrc)});return{rows:mayores(m,7),unidad:'reportes'}}
+    mats:solo=>{const m=new Map();reportesDe(solo).forEach(r=>{const x=matDe(r);cuenta(m,x?x.nombre:(r.materia||'NRC '+r.nrc))});return{rows:mayores(m,7),unidad:'reportes'}}
   };
   function torta(rows){
     const R=rows.filter(r=>r[1]>0),tot=R.reduce((s,r)=>s+r[1],0);
