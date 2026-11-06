@@ -503,22 +503,26 @@ async function parsearInsc(nombre,dato){
         lst=columna(rest,KLST,false),
         cod=columna(rest.filter(k=>k!==lst),KC,false),
         nro=columna(rest.filter(k=>k!==lst&&k!==cod),KNRO,false),
-        nom=columna(rest.filter(k=>k!==lst&&k!==cod&&k!==nro),KMAT,true);
+        nom=columna(rest.filter(k=>k!==lst&&k!==cod&&k!==nro),KMAT,true),
+        suj=columna(rest.filter(k=>![lst,cod,nro,nom].includes(k)),['SUBJECT','PREFIJO'],false),   // SUBJECT + NUMERO_CURSO = código único (FING + 02002 → FING-02002)
+        crn=columna(rest.filter(k=>![lst,cod,nro,nom,suj].includes(k)),['CRN'],false);            // sección exacta si la oferta usa el CRN como Nro_Curso
   if(!lst&&!cod&&!nro&&!nom)throw new Error('no hay columna de materias inscritas (código, NRC / Nro_Curso, materia o «Materias inscritas»)');
   const porCi=new Map();let sinCi=0,filas=0;
   for(const r of rows){
     const k=ciKey(r[ci]);if(!k){sinCi++;continue}
     const es=porCi.get(k)||[];
-    const e0={cod:cod?String(r[cod]||'').trim():'',nro:nro?String(r[nro]||'').trim():'',nom:nom?String(r[nom]||'').trim():'',tok:''};
+    const e0={cod:cod?String(r[cod]||'').trim():(suj&&nro&&String(r[suj]||'').trim()&&String(r[nro]||'').trim()?String(r[suj]).trim()+'-'+String(r[nro]).trim():''),
+      nro:nro?String(r[nro]||'').trim():'',nom:nom?String(r[nom]||'').trim():'',crn:crn?String(r[crn]||'').trim():'',tok:''};
     if(e0.cod||e0.nro||e0.nom)es.push(e0);
     if(lst)partirLista(r[lst]).forEach(tk=>es.push({cod:'',nro:'',nom:'',tok:tk}));
     porCi.set(k,es);filas++}
   if(!porCi.size)throw new Error('ninguna fila trae cédula');
-  return{porCi,filas,sinCi,cols:{ci,lst,cod,nro,nom}}}
+  return{porCi,filas,sinCi,cols:{ci,lst,cod,nro,nom,suj,crn}}}
 
 /* una materia inscrita -> sección de la oferta cargada; sin adivinar: si hay varias secciones con distinto horario es ambigua */
 function resolverUna(e){
-  const nk=normCode,cod=e.cod&&nk(e.cod),nro=e.nro&&nk(e.nro),nom=e.nom&&nz(e.nom),tok=e.tok&&nk(e.tok),tokN=e.tok&&nz(e.tok);
+  const nk=normCode,cod=e.cod&&nk(e.cod),nro=e.nro&&nk(e.nro),nom=e.nom&&nz(e.nom),tok=e.tok&&nk(e.tok),tokN=e.tok&&nz(e.tok),crn=e.crn&&nk(e.crn);
+  if(crn){const x=materias.filter(m=>nk(m.nrc)===crn&&(!(cod||nom)||(cod&&nk(m.cod)===cod)||(nom&&nz(m.nombre)===nom)));if(x.length===1)return{m:x[0]}}   // sección exacta
   const porCod=k=>materias.filter(m=>nk(m.cod)===k||nk(m.nrc)===k);
   let c=[];
   if(cod)c=porCod(cod);
@@ -932,7 +936,7 @@ function materiasFiltradas(){
           hor=g.hs.join('; '),
           base=nro||cod, // <-- CAMBIO AQUÍ: Prioriza el número de sección/NRC
           id=base||(libre++);
-    const dk=normCode(id)+'|'+nz(hor);if(usados.has(dk))continue;usados.add(dk);
+    const dk=normCode(cod)+'|'+normCode(id)+'|'+nz(hor);if(usados.has(dk))continue;usados.add(dk);
     let id2=String(id),c2=1;while(ids.has(id2))id2=id+'X'+(++c2);ids.add(id2);
     out.push({
       nrc:id2,
