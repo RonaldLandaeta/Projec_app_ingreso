@@ -5,78 +5,309 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gestor de horarios con filtro de malla</title>
 <style>
-:root{--bg:#f4f5f7;--pn:#fff;--tx:#1d2330;--mut:#667085;--bd:#dde1e8;--ac:#3b6ef5;--acs:#e6edff;--bad:#d92d20;--bads:#fde8e6;--ok:#12805c;--oks:#def5ec;--wn:#b54708}
-@media(prefers-color-scheme:dark){:root{--bg:#14171d;--pn:#1d222b;--tx:#e8ebf1;--mut:#9aa3b2;--bd:#323946;--ac:#7c9cff;--acs:#27325a;--bad:#ff7a70;--bads:#3d2220;--ok:#4cd6a0;--oks:#16372c;--wn:#f5a65b}}
-*{box-sizing:border-box}
-body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column}
-header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
-h1{font-size:16px;margin:0}
-.load{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
-.mut,small{color:var(--mut)}
-main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 300px;gap:10px;padding:10px}
-.pn{background:var(--pn);border:1px solid var(--bd);border-radius:10px;display:flex;flex-direction:column;min-height:0}
-.pn>h2{font-size:12px;margin:0;padding:10px 12px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
-.sc{overflow:auto;padding:8px;flex:1;min-height:0}
-.mat{border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;position:relative}
-.mat:hover{border-color:var(--ac)}
-.mat .n{position:absolute;right:10px;top:8px;font-size:11px;color:var(--mut)}
-.mat small{display:block}
-.mat.on{background:var(--acs);border-color:var(--ac)}
-.mat.off{opacity:.55;cursor:not-allowed}
-.t{display:inline-block;font-style:normal;font-size:11px;padding:1px 7px;border-radius:99px;margin:4px 4px 0 0;background:var(--bd)}
-.t.ok{background:var(--oks);color:var(--ok)}.t.bad{background:var(--bads);color:var(--bad)}.t.warn{color:var(--wn);background:transparent;border:1px solid var(--wn)}
-.al{border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
-.al.sel{border-color:var(--ac);background:var(--acs)}
-.flt{display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mut)}
-.flt label{display:flex;align-items:center;gap:4px}
-.flt select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:3px 4px;max-width:160px}
-.row{display:flex;align-items:center;gap:8px;padding:7px 8px;cursor:pointer}
-.who{flex:1;min-width:0}.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.arr{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:6px;width:26px;height:26px;cursor:pointer}
-.arr:hover{border-color:var(--ac)}
-.bdg{font-size:11px;min-width:22px;text-align:center;padding:1px 6px;border-radius:99px;background:var(--bd)}
-.bdg.ok{background:var(--oks);color:var(--ok)}
-.rep{padding:0 10px 8px 42px;font-size:13px}.rep ul{margin:0;padding-left:16px}.rep li{margin-bottom:4px}
-.grid{display:grid;min-width:560px}
-.dh{text-align:center;font-weight:600;font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd);background:var(--pn);position:sticky;top:0;z-index:2}
-.hrs div{font-size:11px;color:var(--mut);text-align:right;padding-right:6px}
-.col{position:relative;border-left:1px solid var(--bd);background-image:linear-gradient(var(--bd) 1px,transparent 1px)}
-.blk{position:absolute;left:2px;right:2px;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer;overflow:hidden;color:#1d2330;background:hsl(var(--h) 70% 84%);border-left:4px solid hsl(var(--h) 60% 42%)}
-.blk:hover{outline:2px solid var(--bad)}.blk span{display:block;font-size:11px;opacity:.8}
-.c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
-.bot{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 10px 10px;height:210px}
-.bot.min{height:36px!important;overflow:hidden}.bot.min .in{display:none!important}
-.bot .in{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
-textarea{flex:1;resize:none;border:1px solid var(--bd);border-radius:8px;padding:8px;font:inherit;background:var(--bg);color:var(--tx)}
-.btns{display:flex;gap:8px;flex-wrap:wrap}
-button.b{border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
-button.b.s{background:transparent;color:var(--ac)}
-button:disabled,textarea:disabled{opacity:.5;cursor:not-allowed}
-table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid var(--bd);padding:4px 8px;text-align:left}th{background:var(--bg)}
-#aviso{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ok);color:#fff;padding:9px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9;max-width:90vw}
-#aviso.show{opacity:1}#aviso.bad{background:var(--bad)}
-@media(max-width:1000px){body{height:auto}main{grid-template-columns:1fr}.pn{max-height:60vh}.bot{grid-template-columns:1fr;height:auto}.bot .pn{min-height:220px}}
+/* ============================================================
+   Tokens · un solo lugar para color, radio, sombra y foco
+   (se conservan los nombres --bg/--pn/--tx/--mut/--bd/--ac...)
+   ============================================================ */
+:root{
+  color-scheme:light;
+  --bg:#eef1f6;--pn:#fff;--pn-2:#f7f9fc;--tx:#182033;--mut:#59647a;
+  --bd:#dde3ec;--bd-strong:#c8d1de;
+  --ac:#2f56d9;--ac-hover:#2445bb;--ac-tx:#fff;--acs:#e9efff;--ac-ring:rgba(47,86,217,.3);
+  --bad:#c02a25;--bads:#fdeceb;--ok:#0b7a54;--oks:#e2f6ee;--wn:#9a5705;--wns:#fdf3e1;
+  --on-solid:#fff;
+  --sh-1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh-2:0 8px 22px rgba(16,24,40,.12);
+  --r-sm:7px;--r:10px;--r-lg:14px;
+  --ring:0 0 0 3px var(--ac-ring);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --bg:#0e1219;--pn:#161c26;--pn-2:#1c2431;--tx:#e8edf5;--mut:#9ba7ba;
+  --bd:#283141;--bd-strong:#3a465b;
+  --ac:#8fa9ff;--ac-hover:#aabfff;--ac-tx:#0b1220;--acs:#212c4e;--ac-ring:rgba(143,169,255,.32);
+  --bad:#ff9189;--bads:#3b2321;--ok:#5bdcae;--oks:#14332a;--wn:#f0b163;--wns:#382b18;
+  --on-solid:#0a120e;
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 12px 28px rgba(0,0,0,.5);
+}}
 
+/* ============================================================
+   Base
+   ============================================================ */
+*{box-sizing:border-box}
+::selection{background:var(--acs);color:var(--tx)}
+html{scrollbar-color:var(--bd-strong) transparent}
+body{margin:0;font:14px/1.45 var(--font);background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3{margin:0}
 [hidden]{display:none!important}
-.sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:10px 2px 4px}.sec span{background:var(--bd);border-radius:99px;padding:0 7px;margin-left:4px}
-.acc{font-size:12px}.acc[open]{background:var(--pn);border:1px solid var(--bd);padding:6px 10px;border-radius:8px;position:absolute;z-index:8}.acc label{display:block;padding:2px 0}
-body.big{font-size:17px}
-@media print{.top,header,main>section:not(:nth-child(2)),.bot,#aviso{display:none!important}main{display:block}body{height:auto}.pn{border:0}}
-.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--pn);border-bottom:1px solid var(--bd)}
-.top h1{font-size:16px;margin:0 8px 0 0}
-.step{font-size:13px;color:var(--mut);padding:3px 10px;border-radius:99px}.step.on{background:var(--acs);color:var(--ac);font-weight:600}
-#fase1{flex:1;overflow:auto}#fase2{flex:1;min-height:0;display:flex;flex-direction:column}
-.f1main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:14px}
-#fase1 .card{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:14px}
-#fase1 .card h2{margin:0 0 10px;font-size:14px}
+:where(a,button,summary,input,select,textarea,[role="button"]):focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.mut,small{color:var(--mut)}
+.err{color:var(--bad)}
+
+/* barras de desplazamiento discretas */
+.sc,#fase1,.tb{scrollbar-width:thin;scrollbar-color:var(--bd-strong) transparent}
+.sc::-webkit-scrollbar,#fase1::-webkit-scrollbar,.tb::-webkit-scrollbar{width:10px;height:10px}
+.sc::-webkit-scrollbar-thumb,#fase1::-webkit-scrollbar-thumb,.tb::-webkit-scrollbar-thumb{background:var(--bd-strong);border-radius:99px;border:3px solid var(--pn)}
+.sc::-webkit-scrollbar-track,#fase1::-webkit-scrollbar-track,.tb::-webkit-scrollbar-track{background:transparent}
+
+/* ============================================================
+   Barras superiores y pasos
+   ============================================================ */
+header,.top{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap;padding:9px 14px;background:var(--pn);border-bottom:1px solid var(--bd);box-shadow:var(--sh-1);position:relative;z-index:5}
+.top{padding:9px 16px}
+h1{font-size:15px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;margin:0}
+h1::before{content:"";width:22px;height:22px;flex:none;border-radius:7px;background:linear-gradient(145deg,#6b88f0,var(--ac));box-shadow:inset 0 0 0 1px rgba(255,255,255,.3),0 1px 2px rgba(16,24,40,.2)}
+.top h1{margin:0 6px 0 0}
+.load{display:flex;flex-direction:column;font-size:11.5px;font-weight:500;color:var(--mut);gap:3px}
+.step{font-size:12px;font-weight:600;color:var(--mut);padding:5px 12px;border-radius:99px;border:1px solid transparent;transition:background .15s,color .15s,box-shadow .15s;white-space:nowrap}
+.step.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac-ring)}
+#estado,#profTag,#reglas{font-size:12px;font-variant-numeric:tabular-nums}
+#profTag,#reglas{font-weight:600}
+
+/* ============================================================
+   Estructura de paneles
+   ============================================================ */
+main{flex:1;min-height:0;display:grid;grid-template-columns:280px minmax(0,1fr) 310px;gap:12px;padding:12px}
+.pn{background:var(--pn);border:1px solid var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh-1);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.pn>h2{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0;padding:11px 13px;border-bottom:1px solid var(--bd);background:var(--pn-2);display:flex;align-items:center;gap:8px;line-height:1.45}
+.sc{overflow:auto;padding:10px;flex:1;min-height:0}
+.sc>p.mut{padding:18px 12px;text-align:center;font-size:12.5px;line-height:1.5;margin:0}
+#quien{text-transform:none;letter-spacing:0;color:var(--tx);font-size:12px;font-weight:600}
+
+/* ============================================================
+   Controles de formulario
+   ============================================================ */
+input:not([type=file]):not([type=checkbox]):not([type=radio]),select,textarea{font:inherit;color:var(--tx);background:var(--pn-2);border:1px solid var(--bd-strong);border-radius:8px;padding:7px 10px;transition:border-color .15s,box-shadow .15s,background .15s}
+input:not([type=file]):not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{outline:none;border-color:var(--ac);background:var(--pn);box-shadow:var(--ring)}
+::placeholder{color:var(--mut);opacity:.8}
+input[type=checkbox],input[type=radio]{accent-color:var(--ac);width:15px;height:15px;margin:0;flex:none;cursor:pointer}
+input[type=file]{font:inherit;font-size:12px;color:var(--mut);max-width:100%}
+input[type=file]::file-selector-button{font:inherit;font-size:12px;font-weight:600;margin-right:10px;padding:6px 11px;border-radius:var(--r-sm);border:1px solid var(--bd-strong);background:var(--pn);color:var(--tx);cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+input[type=file]::file-selector-button:hover{border-color:var(--ac);background:var(--acs);color:var(--ac)}
+header input[type=file]{font-size:11px}
+header input[type=file]::file-selector-button{font-size:11px;padding:4px 9px}
+#qMat{flex:1;min-width:0;padding-left:32px;background-color:var(--pn-2);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b95a8' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.6-3.6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:10px center;background-size:15px}
+#profNombre{width:100%}
+
+/* ============================================================
+   Botones
+   ============================================================ */
+button.b,#fase1 button{border:1px solid var(--ac);background:var(--ac);color:var(--ac-tx);border-radius:8px;padding:8px 13px;font:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,border-color .15s,box-shadow .15s,transform .1s;text-decoration:none}
+button.b:hover,#fase1 button:hover{background:var(--ac-hover);border-color:var(--ac-hover)}
+button.b:active,#fase1 button:active{transform:translateY(1px)}
+button.b.s,#fase1 button.s{background:var(--pn);color:var(--ac);border-color:var(--bd-strong)}
+button.b.s:hover,#fase1 button.s:hover{background:var(--acs);border-color:var(--ac)}
+button.b:disabled,#fase1 button:disabled{background:var(--bd);color:var(--mut);border-color:var(--bd);opacity:1}
+button.b.s:disabled,#fase1 button.s:disabled{background:var(--pn-2);color:var(--mut);border-color:var(--bd)}
+button:disabled,textarea:disabled{cursor:not-allowed;transform:none;box-shadow:none}
+textarea:disabled{opacity:.55}
+header .b,.top .b{font-size:11.5px;padding:5px 9px}
+header .b.s,.top .b.s{background:var(--pn-2)}
+#btnMinBot{font-size:11px;padding:3px 9px;border-radius:7px;gap:4px}
+#btnGraf{margin-left:auto}
+
+/* ============================================================
+   Filtros
+   ============================================================ */
+.flt{display:flex;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mut);background:var(--pn)}
+.flt label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.flt label:hover{color:var(--tx)}
+.flt select{max-width:170px}
+
+/* ============================================================
+   Lista de materias
+   ============================================================ */
+.mat{border:1px solid var(--bd);background:var(--pn);border-radius:var(--r);padding:9px 11px;margin-bottom:7px;cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s,transform .15s,background .15s}
+.mat:hover{border-color:var(--ac);box-shadow:var(--sh-1);transform:translateY(-1px)}
+.mat:active{transform:none}
+.mat>b{display:block;padding-right:72px;font-size:13px;font-weight:600;line-height:1.32}
+.mat .n{position:absolute;right:10px;top:9px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--mut);background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:1px 6px}
+.mat small{display:block;font-size:11px;line-height:1.4;margin-top:3px}
+.mat.on{background:var(--acs);border-color:var(--ac);box-shadow:inset 3px 0 0 var(--ac)}
+.mat.off{opacity:.55;background:var(--pn-2);cursor:not-allowed}
+.mat.off:hover{border-color:var(--bd-strong);box-shadow:none;transform:none}
+.t{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px;font-style:normal;font-size:10.5px;font-weight:600;line-height:1.4;padding:2px 7px;border-radius:99px;margin:5px 4px 0 0;background:var(--bd);color:var(--tx);max-width:100%;overflow-wrap:anywhere}
+.t.ok{background:var(--oks);color:var(--ok)}
+.t.bad{background:var(--bads);color:var(--bad)}
+.t.warn{color:var(--wn);background:var(--wns);border:1px solid transparent}
+
+/* separadores de sección pegajosos dentro del panel */
+.sec{position:sticky;top:-10px;z-index:2;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 6px;padding:8px 2px 5px;background:var(--pn)}
+.sec:not(:first-child){margin-top:10px;border-top:1px solid var(--bd)}
+.sec span{display:inline-block;min-width:20px;text-align:center;background:var(--bd);color:var(--mut);border-radius:99px;padding:0 7px;margin-left:4px;font-size:10px;font-variant-numeric:tabular-nums}
+
+/* ============================================================
+   Lista de alumnos
+   ============================================================ */
+.al{border:1px solid var(--bd);border-radius:var(--r);margin-bottom:7px;background:var(--pn);overflow:hidden;transition:border-color .15s,box-shadow .15s,background .15s}
+.al:hover{border-color:var(--bd-strong)}
+.al.sel{border-color:var(--ac);background:var(--acs)}
+.row{display:flex;align-items:center;gap:9px;padding:9px 10px;cursor:pointer}
+.row:hover{background:var(--pn-2)}
+.al.sel .row:hover{background:transparent}
+.who{flex:1;min-width:0}
+.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who b{font-size:13px;font-weight:600}
+.who small{font-size:11px;font-variant-numeric:tabular-nums}
+.arr{border:1px solid var(--bd);background:var(--pn);color:var(--mut);border-radius:8px;width:30px;height:30px;min-width:30px;font-size:11px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .15s,border-color .15s,color .15s}
+.arr:hover{border-color:var(--ac);background:var(--acs);color:var(--ac)}
+.bdg{font-size:10.5px;font-weight:700;min-width:24px;text-align:center;padding:2px 7px;border-radius:99px;background:var(--bd);color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bdg.ok{background:var(--oks);color:var(--ok)}
+.rep{padding:2px 12px 10px 48px;font-size:12.5px}
+.rep ul{margin:0 0 8px;padding:0;list-style:none}
+.rep li{margin-bottom:6px;line-height:1.45}
+.rep li.err{background:var(--bads);color:var(--bad);border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:12px}
+.rep label{display:flex;align-items:flex-start;gap:8px;padding:4px 6px;border-radius:7px;cursor:pointer;transition:background .15s}
+.rep label:hover{background:var(--pn-2)}
+.rep input[type=checkbox]{margin-top:2px}
+.rep b{font-weight:600}
+
+/* ============================================================
+   Horario
+   ============================================================ */
+.grid{display:grid;min-width:620px;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r)}
+.dh{text-align:center;font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding:8px 0;border-bottom:1px solid var(--bd-strong);background:var(--pn);position:sticky;top:0;z-index:4}
+.hrs div{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--mut);text-align:right;padding-right:8px}
+.col{position:relative;border-left:1px solid var(--bd);background-color:var(--pn);background-image:linear-gradient(var(--bd) 1px,transparent 1px)}
+.col:last-child{background-color:var(--pn-2)}
+.blk{position:absolute;left:2px;right:2px;border-radius:7px;padding:4px 7px;font-size:11.5px;line-height:1.25;cursor:pointer;overflow:hidden;color:#16202f;background:hsl(var(--h) 68% 86%);border-left:3px solid hsl(var(--h) 55% 46%);box-shadow:0 1px 2px rgba(16,24,40,.12);transition:box-shadow .15s,filter .15s}
+.blk:hover{filter:brightness(.97);outline:2px solid var(--bad);outline-offset:1px;box-shadow:var(--sh-2);z-index:3}
+.blk::after{content:"×";position:absolute;top:1px;right:5px;font-size:13px;font-weight:700;line-height:1;opacity:0;color:#a01d18;transition:opacity .15s}
+.blk:hover::after{opacity:1}
+.blk:focus-visible{outline:2px solid var(--ac);outline-offset:2px;z-index:3}
+.blk b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:14px}
+.blk span{display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
+@media(prefers-color-scheme:dark){.blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}.blk::after{color:#5c110d}}
+
+/* ============================================================
+   Panel inferior
+   ============================================================ */
+.bot{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 12px 12px;height:230px}
+.bot.min{height:44px!important;overflow:hidden}
+.bot.min .in{display:none!important}
+.bot .in{padding:12px;display:flex;flex-direction:column;gap:9px;flex:1;min-height:0}
+textarea{flex:1;resize:none;border:1px solid var(--bd-strong);border-radius:var(--r);padding:10px 12px;font:inherit;font-size:13px;line-height:1.5;background:var(--pn-2);color:var(--tx)}
+textarea:focus{outline:none;border-color:var(--ac);background:var(--pn);box-shadow:var(--ring)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+#prev{padding:0}
+
+/* ============================================================
+   Tablas
+   ============================================================ */
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--bd);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--pn-2);color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:1}
+tr:hover td{background:var(--pn-2)}
+#prev table{font-size:12px}
+#prev th,#prev td{padding:5px 8px}
+#prev tr:hover td{background:transparent}
+
+/* ============================================================
+   Fase 1 · filtro de malla
+   ============================================================ */
+#fase1{flex:1;overflow:auto}
+#fase2{flex:1;min-height:0;display:flex;flex-direction:column}
+.f1main{max-width:1120px;margin:0 auto;padding:20px 16px 32px;display:grid;gap:14px}
+#fase1 .card{background:var(--pn);border:1px solid var(--bd);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--sh-1)}
+#fase1 .card h2{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.4}
+#fase1 .card h2::before{content:"";width:3px;height:15px;border-radius:99px;background:var(--ac);flex:none}
+#fase1 .card>label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--mut);max-width:420px}
 #fase1 .frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-#fase1 ul{margin:8px 0 0;padding:0;list-style:none}#fase1 li{padding:5px 0;border-top:1px solid var(--bd);font-size:13px}
-#fase1 .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--bd);margin-left:6px}
-#fase1 .pill.ok{background:var(--oks);color:var(--ok)}#fase1 .pill.bad{background:var(--bads);color:var(--bad)}
-#fase1 button{border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
-#fase1 button.s{background:transparent;color:var(--ac)}#fase1 button:disabled{opacity:.5;cursor:not-allowed}
-#fase1 .tb{overflow:auto;max-height:55vh;margin-top:10px}#fase1 th{position:sticky;top:0;background:var(--pn)}
-#fase1 tr.no td{color:var(--mut);text-decoration:line-through}.err{color:var(--bad)}
+#fase1 p{margin:8px 0}
+#fase1 ul{margin:8px 0 0;padding:0;list-style:none}
+#fase1 li{padding:7px 0;border-top:1px solid var(--bd);font-size:12.5px;line-height:1.5}
+#fase1 li:first-child{border-top:0;padding-top:2px}
+#fase1 .pill{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--bd);color:var(--mut);margin-left:6px;vertical-align:middle}
+#fase1 .pill.ok{background:var(--oks);color:var(--ok)}
+#fase1 .pill.bad{background:var(--bads);color:var(--bad)}
+#fase1 .tb{overflow:auto;max-height:55vh;margin-top:12px;border:1px solid var(--bd);border-radius:var(--r);background:var(--pn)}
+#fase1 .tb>p{margin:0;padding:14px}
+#fase1 tr.no td{color:var(--mut);text-decoration:line-through;text-decoration-color:var(--bd-strong)}
+#faltan{line-height:2}
+
+/* ============================================================
+   Detalles / código
+   ============================================================ */
+summary{cursor:pointer;font-weight:600;padding:2px 0;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"";width:0;height:0;border-left:5px solid var(--mut);border-top:4px solid transparent;border-bottom:4px solid transparent;flex:none;transition:transform .15s}
+details[open]>summary::before{transform:rotate(90deg)}
+code{background:var(--pn-2);border:1px solid var(--bd);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:.9em}
+.acc{font-size:12px;flex:none}
+.acc>summary{border:1px solid var(--bd-strong);border-radius:8px;padding:6px 10px;background:var(--pn-2);font-weight:600;color:var(--mut);white-space:nowrap}
+.acc>summary:hover{border-color:var(--ac);color:var(--ac)}
+.acc[open]{position:absolute;right:12px;top:calc(100% + 6px);z-index:30;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh-2);padding:12px;min-width:250px;max-width:min(320px,calc(100vw - 24px))}
+.acc[open]>summary{margin-bottom:8px}
+.acc label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer;font-size:12.5px;color:var(--tx)}
+.acc label:hover{color:var(--ac)}
+
+/* ============================================================
+   Aviso flotante
+   ============================================================ */
+#aviso{position:fixed;left:50%;top:16px;transform:translate(-50%,-10px);background:var(--ok);color:var(--on-solid);padding:10px 16px 10px 14px;border-radius:var(--r);font-size:13px;font-weight:500;line-height:1.4;box-shadow:var(--sh-2);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:60;max-width:min(92vw,620px);display:flex;align-items:center;gap:8px}
+#aviso::before{content:"✓";display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.22);font-size:11px;font-weight:700;flex:none}
+#aviso.show{opacity:1;transform:translate(-50%,0)}
+#aviso.bad{background:var(--bad)}
+#aviso.bad::before{content:"!"}
+@media(prefers-color-scheme:dark){#aviso::before{background:rgba(0,0,0,.14)}}
+
+body.big{font-size:17px;line-height:1.5}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media(max-width:1280px){main{grid-template-columns:240px minmax(0,1fr) 280px;gap:10px;padding:10px}}
+@media(max-width:1000px){
+  body{height:auto;min-height:100vh}
+  main{grid-template-columns:1fr;gap:10px;padding:10px}
+  main>.pn{max-height:65vh}
+  main>.pn:nth-child(2){min-height:55vh}
+  .bot{grid-template-columns:1fr;height:auto;padding:0 10px 10px}
+  .bot .pn{min-height:220px}
+  #btnGraf{margin-left:0}
+}
+@media(max-width:720px){
+  header,.top{padding:10px 12px;gap:8px}
+  h1{font-size:14px}
+  .load{flex:1 1 140px;font-size:10.5px}
+  header .b,.top .b{font-size:11.5px;padding:5px 8px}
+  .f1main{padding:14px 12px 24px;gap:12px}
+  #fase1 .card{padding:14px}
+  .flt{gap:7px 10px;padding:9px 10px}
+  .row{padding:9px}
+  .rep{padding:2px 10px 10px 12px}
+  .step{font-size:11px;padding:4px 10px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* ============================================================
+   Impresión · solo el horario del alumno
+   ============================================================ */
+@media print{
+  @page{size:landscape;margin:10mm}
+  .top,header,#fase1,.bot,#aviso,#dlgGraf,#btnGraf{display:none!important}
+  body{height:auto;background:#fff;color:#000;display:block;font-size:12px}
+  main{display:block;padding:0;gap:0}
+  main>section:not(:nth-child(2)){display:none!important}
+  .pn{border:0;border-radius:0;box-shadow:none;overflow:visible;background:#fff}
+  .pn>h2{display:none!important}
+  #hor{overflow:visible;padding:0}
+  .grid{min-width:0;border:1px solid #bbb;border-radius:0;overflow:visible}
+  .dh{position:static;color:#333;background:#fff}
+  .col{background-color:#fff}
+  .col:last-child{background-color:#fafafa}
+  .blk{box-shadow:none}
+  .blk::after{display:none}
+  .hrs div{color:#555}
+  .sec{position:static}
+}
 </style>
 </head>
 <body>
@@ -88,7 +319,7 @@ body.big{font-size:17px}
 <div id="fase1">
 <div class="f1main">
     <section class="card"><h2>Profesor</h2>
-    <label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name" style="font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);min-width:260px"></label>
+    <label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name"></label>
   </section>
   <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
   <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
@@ -98,7 +329,7 @@ body.big{font-size:17px}
       <tr><td>Codigo</td><td>Codigo, Cod, ID, Clave, Sigla</td><td>Criterio principal para comparar con la malla</td></tr>
       <tr><td>Nro_Curso</td><td>Nro_Curso, Nro de Curso, Numero de Curso</td><td>Número del curso (NRC): identifica cada sección en el gestor</td></tr>
       <tr><td>Materia</td><td>Materia, Nombre, Asignatura</td><td>Respaldo cuando no hay código</td></tr>
-      <tr><td>Prelaciones</td><td>Prelaciones, Prerrequisitos</td><td>Materias previas (informativo; se muestra en el gestor)</td></tr>
+      <tr><td>Prelaciones</td><td>Prelaciones, Prerrequisitos</td><td>Se conserva en el archivo; el gestor asume los prerrequisitos cumplidos y no los muestra</td></tr>
       <tr><td>Horario</td><td>Horario, Dias y Horas</td><td>Texto como «Lunes y Miércoles 07:00-09:00»; el gestor lo necesita para armar el horario</td></tr>
     </table>
     <p><b>Correquisitos</b> = Nro_Curso de la sección que va junta. Si es <u>el mismo Nro_Curso</u> de la fila (Física y su laboratorio) se ven juntas y se agregan o quitan juntas. Si es <u>otro Nro_Curso</u>, esa materia lo exige aprobado (<code>materias_aprobadas</code> del alumno en el data.json) o inscrito en el mismo semestre.</p><p class="mut">La malla debe tener al menos Codigo o Materia. Cualquier otra columna se conserva en «Otros datos». Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
@@ -136,17 +367,17 @@ body.big{font-size:17px}
 <header>
   <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
   <label class="load" title="Archivo con solo cédula y materias inscritas (virtual). Se vincula por cédula con los alumnos de los reportes.">Detalles de inscripción<input type="file" id="fIns" accept=".xlsx,.csv,.json,.txt"></label>
-  <button class="b s" id="btnResetSt" style="font-size:12px;padding:4px 8px" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
+  <button class="b s" id="btnResetSt" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
   <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Permitir deshacer (botón y Ctrl+Z)</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
-  <button class="b s" id="btnUndo" hidden style="padding:4px 8px;font-size:12px">↶ Deshacer</button>
-  <button class="b s" id="btnRedo" hidden style="padding:4px 8px;font-size:12px">↷ Rehacer</button>
-  <button class="b s" id="btnPrint" style="padding:4px 8px;font-size:12px">Imprimir horario</button>
-  <button class="b s" id="btnResp" style="padding:4px 8px;font-size:12px">Respaldo ⬇</button>
-  <button class="b s" id="btnRest" style="padding:4px 8px;font-size:12px">Cargar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
+  <button class="b s" id="btnUndo" hidden>↶ Deshacer</button>
+  <button class="b s" id="btnRedo" hidden>↷ Rehacer</button>
+  <button class="b s" id="btnPrint">Imprimir horario</button>
+  <button class="b s" id="btnResp">Respaldo ⬇</button>
+  <button class="b s" id="btnRest">Cargar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
 </header>
 <main>
-  <section class="pn"><h2>Materias</h2><div class="flt"><input id="qMat" placeholder="Buscar: nombre, código, día…" style="flex:1;font:inherit;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)"></div><div class="sc" id="mats"></div></section>
+  <section class="pn"><h2>Materias</h2><div class="flt"><input id="qMat" placeholder="Buscar: nombre, código, día…"></div><div class="sc" id="mats"></div></section>
   <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
   <section class="pn"><h2>Alumnos</h2>
     <div class="flt">
@@ -157,7 +388,7 @@ body.big{font-size:17px}
     <div class="sc" id="als"></div></section>
 </main>
 <div class="bot" id="botPanel">
-  <section class="pn"><h2 style="display:flex;justify-content:space-between;align-items:center"><span>Comentarios · <span id="quien">Selecciona un alumno</span></span><button class="b s" id="btnMinBot" style="padding:2px 8px;font-size:11px;cursor:pointer">─ Minimizar</button></h2>
+  <section class="pn"><h2 style="display:flex;justify-content:space-between;align-items:center"><span>Comentarios · <span id="quien">Selecciona un alumno</span></span><button class="b s" id="btnMinBot">─ Minimizar</button></h2>
     <div class="in">
       <textarea id="nota" placeholder="Resolución del problema del alumno…"></textarea>
       <div class="btns"><button class="b" id="btnListo">Marcar alumno como listo</button></div>
@@ -204,7 +435,7 @@ function jrows(j){
   return[];
 }
 const KC=['CODIGO','COD','ID','CLAVE','NRC','SIGLA'],KN=['NOMBRE','MATERIA','ASIGNATURA','CURSO','NAME'];
-/* formato de entrega: Codigo;Nro_Curso;Materia;Prelaciones;Horario */
+/* formato de entrega: Codigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario */
 const KNRO=['NRO CURSO','NRO DE CURSO','NUMERO CURSO','NUMERO DE CURSO','NRO'],KPRE=['PRELACIONES','PRELACION','PRERREQUISITOS','PRERREQUISITO'],KHOR=['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'],KCOR=['CORREQUISITOS','CORREQUISITO'];
 function columna(keys,L,excluir){
   const ok=k=>!(excluir&&/PROFESOR|DOCENTE|ALUMNO|ESTUDIANTE/.test(nz(k)));
@@ -395,11 +626,15 @@ const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):nu
 function canonN(arr){const ok=[],fuera=[],seen=new Set();for(const n of arr||[]){const s=String(n).trim(),m=byNrc(s),v=m?m.nrc:s,k=normCode(v);if(!k||seen.has(k))continue;seen.add(k);(m?ok:fuera).push(v)}return{ok,fuera}}
 
 const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
-/* Tipos de error de Page_reports (mismo catálogo que lib/catalogos.ts). Solo los de TIPOS_CAMBIO permiten
-   ofrecer otra sección de la materia reportada; con el resto la materia queda bloqueada hasta resolver el reporte. */
+/* Tipos de error de Page_reports (mismo catálogo que lib/catalogos.ts). Los de TIPOS_CAMBIO permiten
+   ofrecer otra sección de la materia reportada; «Error de prerrequisito» es solo informativo: se muestra
+   en pantalla pero no bloquea la inscripción. Con el resto la materia queda bloqueada hasta resolver el reporte. */
 const TIPOS_ERROR=['Error de prerrequisito','Error de correquisito','Reserva cerrada','Cruce de horario','Cambio de horario','Otros'];
 const TIPOS_CAMBIO=['cruce de horario','cambio de horario'];
+const TIPOS_SOLO_AVISO=['error de prerrequisito'];
 const permiteCambio=r=>typeof r.permite_cambio==='boolean'?r.permite_cambio:(TIPOS_CAMBIO.includes(norm(r.tipo_error||'').trim())||/cambio|cruce|choque/.test(norm(r.tipo_error||'')));
+const esSoloAviso=r=>TIPOS_SOLO_AVISO.includes(norm(r.tipo_error||'').trim());   // se muestra, no bloquea
+const permiteInscribir=r=>permiteCambio(r)||esSoloAviso(r);
 /* El Nro_Curso se repite entre carreras (02002 existe en FING, MECA y TELE): si el reporte trae el código
    único de la materia (cod) se enlaza por código; solo sin cod se usa el NRC (archivos antiguos). */
 const matDe=r=>r.cod?byNrc(r.cod):byNrc(r.nrc);
@@ -423,8 +658,6 @@ function slots(h){
   }
   return out}
 const tok=s=>String(s==null?'':s).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);   // solo para correquisitos (NRC numéricos)
-const tokPre=s=>String(s==null?'':s).split(/\s*[,;\/\n]\s*|\s+[yYoO]\s+/).map(x=>x.trim()).filter(x=>x&&!/^[yYoO]$/.test(x));
-const esCod=p=>/^[A-Za-z]{2,6}[- ]?[A-Za-z]*\d+[A-Za-z]?$/.test(p);                     // "Ingreso", "20 UC"… no son prelaciones de materia
 const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
 const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
 
@@ -434,7 +667,7 @@ const normM=a=>(a||[]).map(m=>{
   const nombre = m.nombre || m.materia || m.rawName || '';
   const horario = m.horario || m.hor || '';
   const profesor = m.profesor || '';
-  const det = m.det || [m.nro && 'Curso '+m.nro, m.pre && 'Prelaciones: '+m.pre].filter(Boolean).join(' · ');
+  const det = m.det || [m.nro && 'Curso '+m.nro].filter(Boolean).join(' · ');
   return {
     nrc: rawNrc,
     cod: String(m.cod || rawNrc).trim(),
@@ -443,7 +676,7 @@ const normM=a=>(a||[]).map(m=>{
     horario,
     profesor,
     det,
-    pre:String(m.pre||m.prelaciones||m.prerrequisitos||''),coreq:tok(m.correquisitos||m.coreq),prel:tokPre(m.pre||m.prelaciones||m.prerrequisitos).filter(esCod),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
+    coreq:tok(m.correquisitos||m.coreq),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
   };
 }).filter(m => m.nrc && m.nombre);
 
@@ -497,27 +730,31 @@ async function parsearInsc(nombre,dato){
   else rows=csv(dato);
   if(!rows.length)throw new Error('no se encontraron filas');
   const keys=[...new Set(rows.slice(0,300).flatMap(r=>Object.keys(r)))],
-        ci=columna(keys,KCI,false);
+        ci=columna(keys,KCI,false),
+        nomAl=columna(keys,['NOMBRE','ALUMNO','ESTUDIANTE'],false),
+        est=columna(keys,['ESTATUS','ESTADO','STATUS'],false);
   if(!ci)throw new Error('no hay columna de cédula (Cedula, CI…)');
-  const rest=keys.filter(k=>k!==ci),
+  const rest=keys.filter(k=>![ci,nomAl,est].includes(k)),
         lst=columna(rest,KLST,false),
         cod=columna(rest.filter(k=>k!==lst),KC,false),
         nro=columna(rest.filter(k=>k!==lst&&k!==cod),KNRO,false),
         nom=columna(rest.filter(k=>k!==lst&&k!==cod&&k!==nro),KMAT,true),
-        suj=columna(rest.filter(k=>![lst,cod,nro,nom].includes(k)),['SUBJECT','PREFIJO'],false),   // SUBJECT + NUMERO_CURSO = código único (FING + 02002 → FING-02002)
-        crn=columna(rest.filter(k=>![lst,cod,nro,nom,suj].includes(k)),['CRN'],false);            // sección exacta si la oferta usa el CRN como Nro_Curso
-  if(!lst&&!cod&&!nro&&!nom)throw new Error('no hay columna de materias inscritas (código, NRC / Nro_Curso, materia o «Materias inscritas»)');
-  const porCi=new Map();let sinCi=0,filas=0;
+        suj=columna(rest.filter(k=>![lst,cod,nro,nom].includes(k)),['SUBJECT','PREFIJO'],false),
+        crn=columna(rest.filter(k=>![lst,cod,nro,nom,suj].includes(k)),['CRN'],false);
+  if(!lst&&!cod&&!nro&&!nom)throw new Error('no hay columna de materias inscritas');
+  const porCi=new Map(),nombresCi=new Map();let sinCi=0,filas=0;
   for(const r of rows){
+    if(est && String(r[est]||'').trim().toUpperCase()!=='RW')continue;
     const k=ciKey(r[ci]);if(!k){sinCi++;continue}
+    if(nomAl && r[nomAl])nombresCi.set(k,String(r[nomAl]).trim());
     const es=porCi.get(k)||[];
     const e0={cod:cod?String(r[cod]||'').trim():(suj&&nro&&String(r[suj]||'').trim()&&String(r[nro]||'').trim()?String(r[suj]).trim()+'-'+String(r[nro]).trim():''),
       nro:nro?String(r[nro]||'').trim():'',nom:nom?String(r[nom]||'').trim():'',crn:crn?String(r[crn]||'').trim():'',tok:''};
     if(e0.cod||e0.nro||e0.nom)es.push(e0);
     if(lst)partirLista(r[lst]).forEach(tk=>es.push({cod:'',nro:'',nom:'',tok:tk}));
     porCi.set(k,es);filas++}
-  if(!porCi.size)throw new Error('ninguna fila trae cédula');
-  return{porCi,filas,sinCi,cols:{ci,lst,cod,nro,nom,suj,crn}}}
+  if(!porCi.size)throw new Error('ninguna fila trae cédula con estatus RW');
+  return{porCi,nombresCi,filas,sinCi,cols:{ci,nomAl,est,lst,cod,nro,nom,suj,crn}}}
 
 /* una materia inscrita -> sección de la oferta cargada; sin adivinar: si hay varias secciones con distinto horario es ambigua */
 function resolverUna(e){
@@ -575,7 +812,7 @@ function aplicar(){
   if(datos&&datos._sig)st.sig=datos._sig;
   materias=matsArchivo||(datos?normM(datos.materias):[]);
   if((!materias||!materias.length)&&malla){
-    materias=malla.entries.map(e=>({nrc:e.rawCode||e.code,cod:e.rawCode||e.code,nro:e.nro,nombre:e.rawName||e.name,horario:e.hor,profesor:'',det:[e.nro&&'Curso '+e.nro,e.pre&&'Prelaciones: '+e.pre].filter(Boolean).join(' · '),sl:slots(e.hor)}));
+    materias=malla.entries.map(e=>({nrc:e.rawCode||e.code,cod:e.rawCode||e.code,nro:e.nro,nombre:e.rawName||e.name,horario:e.hor,profesor:'',det:[e.nro&&'Curso '+e.nro].filter(Boolean).join(' · '),sl:slots(e.hor)}));
   }
   idx1=new Map();idx2=new Map();rcache=new Map();acache=new Map();
   materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
@@ -593,14 +830,14 @@ function aplicar(){
     else{r=canonN(a.materias_inscriptas||[]);if(insc)inscStats.sinIns++}
     if(insc)inscStats.keys.add(ciKey(ci));
     st[ci]={n:r.ok,fuera:r.fuera,amb,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||''};
-    return Object.assign({},a,{ci});
+    return Object.assign({},a,{ci,nombre:(insc&&insc.nombresCi&&insc.nombresCi.get(ciKey(ci)))||a.nombre});
   }).filter(Boolean):[];
   reportes=datos?(datos.reportes||[]):[];
   repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
   if(sinCi||dupCi)aviso('Se omitieron alumnos: '+sinCi+' sin cédula y '+dupCi+' con cédula repetida.',true);
   if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
   $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes'+(insc?' · inscripción: '+inscStats.vinc+'/'+alumnos.length+' vinculados':'');
-  {const R=[['correquisitos',materias.some(m=>(m.coreq||[]).length)],['prelaciones',materias.some(m=>(m.prel||[]).length)&&alumnos.some(a=>a.materias_aprobadas||a.aprobadas)],
+  {const R=[['correquisitos',materias.some(m=>(m.coreq||[]).length)],
      ['créditos',materias.some(m=>m.cred)&&alumnos.some(a=>a.max_creditos||a.max_uc)],['cupo',materias.some(m=>m.cupo)]];
    let s=$('reglas');if(!s){s=document.createElement('span');s.id='reglas';s.className='mut';$('estado').after(s)}}
   mostrarProf();
@@ -627,8 +864,6 @@ function validar(m,cur,ex){
   const c=conflictosCon(m).concat(ex.filter(o=>choca(o.sl,m.sl)));if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
   const a=alumnos.find(x=>x.ci===sel);
   if(a){
-    const aa=a.materias_aprobadas||a.aprobadas;
-        if(Array.isArray(aa)&&m.prel&&m.prel.length){const ap=new Set(aa.map(nc)),f=m.prel.filter(p=>!ap.has(nc(p)));if(f.length)return 'Faltan prelaciones de «'+m.nombre+'»: '+f.join(', ')+'.'}
     const mx=+(a.max_creditos||a.max_uc||0);
     if(mx&&m.cred){const t=cur.n.map(byNrc).concat(ex).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
   }
@@ -727,12 +962,12 @@ function renderMaterias(){
     if(!sel)return{isRep:false,allow:true};
     const rs=repsSel.filter(r=>repEsDe(r,m));
     if(!rs.length)return{isRep:false,allow:true};
-    return{isRep:true,allow:rs.some(permiteCambio)}};
+    return{isRep:true,allow:rs.some(permiteInscribir)}};
   const qq=nz($('qMat').value);
   const vis=materias.filter(m=>(isInc(m)||getRepStatus(m).allow)&&(!qq||nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
   const ctx=materias.filter(m=>isInc(m)||getRepStatus(m).isRep);          // las que "piden" requisitos: en horario o reportadas
   const necesita=(x,m)=>{const r=reqs(x);return r.j.includes(m)||(r.p.includes(m)&&!A.has(nc(m.cod)))};
-  const SEC=[['horario','En horario'],['reporte','Reporte'],['correq','Correquisito'],['prerreq','Prerrequisito'],['choque','Choque de horario'],['sobra','Materias sobrantes']];
+  const SEC=[['horario','En horario'],['reporte','Reporte'],['correq','Correquisito'],['choque','Choque de horario'],['sobra','Materias sobrantes']];
   const G={},H=new Map();SEC.forEach(s=>G[s[0]]=[]);
   for(const m of vis){
     const on=isInc(m),apr=!!m.cod&&A.has(nc(m.cod)),rp=getRepStatus(m).isRep;
@@ -740,12 +975,11 @@ function renderMaterias(){
     if(on){k='horario';cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
     else{
       const c=m.sl.length?conflictosCon(m):[];
-      const nec=ctx.filter(x=>x!==m&&necesita(x,m)),pre=apr?[]:ctx.filter(x=>x!==m&&(x.prel||[]).map(nc).includes(nc(m.cod)));
+      const nec=ctx.filter(x=>x!==m&&necesita(x,m));
       if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
       else if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}
       if(nec.length)tag+='<em class="t">Correquisito de '+esc(nec.map(x=>x.nombre).join(', '))+'</em>';
-      if(pre.length)tag+='<em class="t">Prerrequisito de '+esc(pre.map(x=>x.nombre).join(', '))+'</em>';
-      k=rp?'reporte':nec.length?'correq':pre.length?'prerreq':c.length?'choque':'sobra';
+      k=rp?'reporte':nec.length?'correq':c.length?'choque':'sobra';
     }
     if(rp)tag+='<em class="t warn">⚠ reportada</em>';
     if(apr)tag+='<em class="t ok">Aprobada ✓</em>';
@@ -769,7 +1003,7 @@ function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],fu=(st[a.ci]&&st[a.ci].fu
   for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
     if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
     if(nz(ms[i].nombre)===nz(ms[j].nombre))out.push('Materia duplicada: '+ms[i].nombre)}
-  const S=new Set(c.map(normCode)),A=aprobadasDe(a.ci);ms.filter(x=>!okReq(x,S,A)).forEach(x=>out.push('Falta correquisito/prerrequisito de «'+x.nombre+'»'));
+  const S=new Set(c.map(normCode)),A=aprobadasDe(a.ci);ms.filter(x=>!okReq(x,S,A)).forEach(x=>out.push('Falta correquisito de «'+x.nombre+'»'));
   acache.set(a.ci,{k:ck,v:out});return out}
 const totalProbs = a => repsDe(a).length;
 const pendientesReal = a => repsDe(a)
@@ -945,8 +1179,8 @@ function materiasFiltradas(){
       nombre:it.rawName||cod,
       horario:hor,
       profesor:'',
-      det:[nro&&'Sección/NRC '+nro,it.pre&&'Prelaciones: '+it.pre,it.cor&&'Correquisitos: '+it.cor].filter(Boolean).join(' · '),
-      pre:String(it.pre||''),coreq:tok(it.cor),prel:tokPre(it.pre).filter(esCod),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
+      det:[nro&&'Sección/NRC '+nro,it.cor&&'Correquisitos: '+it.cor].filter(Boolean).join(' · '),
+      coreq:tok(it.cor),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
       sl:slots(hor)
     });
   }
@@ -958,7 +1192,7 @@ function fase(n){
   if(n===2)aplicar();
 }
 let profesor='';try{profesor=localStorage.getItem('hr_prof')||''}catch(e){}
-if(!$('profNombre')){const c=document.createElement('section');c.className='card';c.innerHTML='<h2>Profesor</h2><label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name" style="font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);min-width:260px"></label>';document.querySelector('.f1main').prepend(c)}
+if(!$('profNombre')){const c=document.createElement('section');c.className='card';c.innerHTML='<h2>Profesor</h2><label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name"></label>';document.querySelector('.f1main').prepend(c)}
 $('profNombre').value=profesor;
 $('profNombre').oninput=e=>{profesor=e.target.value.trim();try{localStorage.setItem('hr_prof',profesor)}catch(x){}mostrarProf()};
 function mostrarProf(){let s=$('profTag');if(!s){s=document.createElement('span');s.id='profTag';s.className='mut';$('estado').after(s)}s.textContent=' · Profesor: '+(profesor||'(sin nombre)')}
@@ -997,7 +1231,7 @@ document.addEventListener('keydown',e=>{      // Enter / Espacio activan materia
     if(k){const n=[...document.querySelectorAll('#mats .mat')].find(x=>x.dataset.nrc===k);if(n)n.focus()}
   }});
 {const s=document.createElement('style');           // impresión: nombre y cédula del alumno + colores
- s.textContent='#printHdr{display:none}@media print{#printHdr{display:block!important;font:600 16px system-ui;margin:0 0 8px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+ s.textContent='#printHdr{display:none}@media print{#printHdr{display:block!important;font:600 15px/1.4 system-ui;letter-spacing:-.01em;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #c8c8c8}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
  document.head.appendChild(s);
  const h=document.createElement('div');h.id='printHdr';document.body.prepend(h);
  addEventListener('beforeprint',()=>{const a=alumnos.find(x=>x.ci===sel);h.textContent=a?'Horario de '+a.nombre+' · C.I. '+a.ci:'Horario'})}
@@ -1048,13 +1282,17 @@ document.addEventListener('keydown',e=>{      // Enter / Espacio activan materia
   $('btnPrint').after(bt);
   bt.onclick=()=>{pintar();dlg.showModal?dlg.showModal():dlg.setAttribute('open','')};
   const s=document.createElement('style');
-  s.textContent='#dlgGraf{border:1px solid var(--bd);border-radius:12px;background:var(--pn);color:var(--tx);padding:14px 16px;width:min(560px,94vw)}#dlgGraf::backdrop{background:#0006}'+
-    '.gf-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.gf-h button{border:0;background:none;color:var(--tx);font-size:18px;cursor:pointer}'+
-    '.gf-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.gf-tabs button{border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:8px;padding:5px 10px;cursor:pointer;font:inherit}'+
-    '.gf-tabs button.on{background:var(--acs);border-color:var(--ac);color:var(--ac);font-weight:600}.gf-s{font-size:13px;color:var(--mut)}'+
-    '.gf-fig{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:8px}.gf-ley{list-style:none;margin:0;padding:0;flex:1;min-width:180px;font-size:13px}'+
-    '.gf-ley li{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--bd)}.gf-ley i{width:12px;height:12px;border-radius:3px;flex:none}'+
-    '.gf-ley span{flex:1}.gf-ley small{color:var(--mut);min-width:34px;text-align:right}@media print{#dlgGraf,#btnGraf{display:none!important}}';
+  s.textContent='#dlgGraf{border:1px solid var(--bd);border-radius:16px;background:var(--pn);color:var(--tx);padding:0;width:min(600px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--sh-2)}#dlgGraf::backdrop{background:rgba(8,12,20,.55);backdrop-filter:blur(2px)}'+
+    '.gf-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--pn);z-index:1}.gf-h b{font-size:14px}'+
+    '.gf-h button{width:32px;height:32px;border:1px solid transparent;background:var(--pn-2);color:var(--mut);font-size:15px;line-height:1;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}.gf-h button:hover{background:var(--bads);color:var(--bad)}'+
+    '.gf-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 16px 8px;border-bottom:1px solid var(--bd)}.gf-tabs button{border:1px solid transparent;background:transparent;color:var(--mut);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;font-weight:600;transition:background .15s,color .15s}.gf-tabs button:hover{background:var(--pn-2);color:var(--tx)}'+
+    '.gf-tabs button.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac-ring)}.gf-s{display:block;font-size:12px;color:var(--mut);padding:10px 16px 0}'+
+    '#gfCuerpo{padding:12px 16px 16px}#gfCuerpo>p{margin:8px 0}'+
+    '.gf-fig{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px}.gf-fig svg{width:min(240px,60vw);height:auto;flex:none}'+
+    '.gf-ley{list-style:none;margin:0;padding:0;flex:1;min-width:180px;font-size:12.5px}'+
+    '.gf-ley li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)}.gf-ley li:last-child{border-bottom:0}.gf-ley i{width:12px;height:12px;border-radius:4px;flex:none}'+
+    '.gf-ley span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gf-ley b{font-variant-numeric:tabular-nums;font-weight:600}.gf-ley small{color:var(--mut);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}'+
+    '@media(max-width:520px){.gf-fig{justify-content:center}.gf-ley{width:100%}}@media print{#dlgGraf,#btnGraf{display:none!important}}';
   document.head.appendChild(s);
 }
 </script>

@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestor de horarios con filtro de malla</title>
+<style>
+/* ============================================================
+   Tokens · un solo lugar para color, radio, sombra y foco
+   (se conservan los nombres --bg/--pn/--tx/--mut/--bd/--ac...)
+   ============================================================ */
+:root{
+  color-scheme:light;
+  --bg:#eef1f6;--pn:#fff;--pn-2:#f7f9fc;--tx:#182033;--mut:#59647a;
+  --bd:#dde3ec;--bd-strong:#c8d1de;
+  --ac:#2f56d9;--ac-hover:#2445bb;--ac-tx:#fff;--acs:#e9efff;--ac-ring:rgba(47,86,217,.3);
+  --bad:#c02a25;--bads:#fdeceb;--ok:#0b7a54;--oks:#e2f6ee;--wn:#9a5705;--wns:#fdf3e1;
+  --on-solid:#fff;
+  --sh-1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh-2:0 8px 22px rgba(16,24,40,.12);
+  --r-sm:7px;--r:10px;--r-lg:14px;
+  --ring:0 0 0 3px var(--ac-ring);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --bg:#0e1219;--pn:#161c26;--pn-2:#1c2431;--tx:#e8edf5;--mut:#9ba7ba;
+  --bd:#283141;--bd-strong:#3a465b;
+  --ac:#8fa9ff;--ac-hover:#aabfff;--ac-tx:#0b1220;--acs:#212c4e;--ac-ring:rgba(143,169,255,.32);
+  --bad:#ff9189;--bads:#3b2321;--ok:#5bdcae;--oks:#14332a;--wn:#f0b163;--wns:#382b18;
+  --on-solid:#0a120e;
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 12px 28px rgba(0,0,0,.5);
+}}
+
+/* ============================================================
+   Base
+   ============================================================ */
+*{box-sizing:border-box}
+::selection{background:var(--acs);color:var(--tx)}
+html{scrollbar-color:var(--bd-strong) transparent}
+body{margin:0;font:14px/1.45 var(--font);background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3{margin:0}
+[hidden]{display:none!important}
+:where(a,button,summary,input,select,textarea,[role="button"]):focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.mut,small{color:var(--mut)}
+.err{color:var(--bad)}
+
+/* barras de desplazamiento discretas */
+.sc,#fase1,.tb{scrollbar-width:thin;scrollbar-color:var(--bd-strong) transparent}
+.sc::-webkit-scrollbar,#fase1::-webkit-scrollbar,.tb::-webkit-scrollbar{width:10px;height:10px}
+.sc::-webkit-scrollbar-thumb,#fase1::-webkit-scrollbar-thumb,.tb::-webkit-scrollbar-thumb{background:var(--bd-strong);border-radius:99px;border:3px solid var(--pn)}
+.sc::-webkit-scrollbar-track,#fase1::-webkit-scrollbar-track,.tb::-webkit-scrollbar-track{background:transparent}
+
+/* ============================================================
+   Barras superiores y pasos
+   ============================================================ */
+header,.top{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap;padding:9px 14px;background:var(--pn);border-bottom:1px solid var(--bd);box-shadow:var(--sh-1);position:relative;z-index:5}
+.top{padding:9px 16px}
+h1{font-size:15px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;margin:0}
+h1::before{content:"";width:22px;height:22px;flex:none;border-radius:7px;background:linear-gradient(145deg,#6b88f0,var(--ac));box-shadow:inset 0 0 0 1px rgba(255,255,255,.3),0 1px 2px rgba(16,24,40,.2)}
+.top h1{margin:0 6px 0 0}
+.load{display:flex;flex-direction:column;font-size:11.5px;font-weight:500;color:var(--mut);gap:3px}
+.step{font-size:12px;font-weight:600;color:var(--mut);padding:5px 12px;border-radius:99px;border:1px solid transparent;transition:background .15s,color .15s,box-shadow .15s;white-space:nowrap}
+.step.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac-ring)}
+#estado,#profTag,#reglas{font-size:12px;font-variant-numeric:tabular-nums}
+#profTag,#reglas{font-weight:600}
+
+/* ============================================================
+   Estructura de paneles
+   ============================================================ */
+main{flex:1;min-height:0;display:grid;grid-template-columns:280px minmax(0,1fr) 310px;gap:12px;padding:12px}
+.pn{background:var(--pn);border:1px solid var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh-1);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.pn>h2{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0;padding:11px 13px;border-bottom:1px solid var(--bd);background:var(--pn-2);display:flex;align-items:center;gap:8px;line-height:1.45}
+.sc{overflow:auto;padding:10px;flex:1;min-height:0}
+.sc>p.mut{padding:18px 12px;text-align:center;font-size:12.5px;line-height:1.5;margin:0}
+#quien{text-transform:none;letter-spacing:0;color:var(--tx);font-size:12px;font-weight:600}
+
+/* ============================================================
+   Controles de formulario
+   ============================================================ */
+input:not([type=file]):not([type=checkbox]):not([type=radio]),select,textarea{font:inherit;color:var(--tx);background:var(--pn-2);border:1px solid var(--bd-strong);border-radius:8px;padding:7px 10px;transition:border-color .15s,box-shadow .15s,background .15s}
+input:not([type=file]):not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{outline:none;border-color:var(--ac);background:var(--pn);box-shadow:var(--ring)}
+::placeholder{color:var(--mut);opacity:.8}
+input[type=checkbox],input[type=radio]{accent-color:var(--ac);width:15px;height:15px;margin:0;flex:none;cursor:pointer}
+input[type=file]{font:inherit;font-size:12px;color:var(--mut);max-width:100%}
+input[type=file]::file-selector-button{font:inherit;font-size:12px;font-weight:600;margin-right:10px;padding:6px 11px;border-radius:var(--r-sm);border:1px solid var(--bd-strong);background:var(--pn);color:var(--tx);cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+input[type=file]::file-selector-button:hover{border-color:var(--ac);background:var(--acs);color:var(--ac)}
+header input[type=file]{font-size:11px}
+header input[type=file]::file-selector-button{font-size:11px;padding:4px 9px}
+#qMat{flex:1;min-width:0;padding-left:32px;background-color:var(--pn-2);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b95a8' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.6-3.6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:10px center;background-size:15px}
+#profNombre{width:100%}
+
+/* ============================================================
+   Botones
+   ============================================================ */
+button.b,#fase1 button{border:1px solid var(--ac);background:var(--ac);color:var(--ac-tx);border-radius:8px;padding:8px 13px;font:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,border-color .15s,box-shadow .15s,transform .1s;text-decoration:none}
+button.b:hover,#fase1 button:hover{background:var(--ac-hover);border-color:var(--ac-hover)}
+button.b:active,#fase1 button:active{transform:translateY(1px)}
+button.b.s,#fase1 button.s{background:var(--pn);color:var(--ac);border-color:var(--bd-strong)}
+button.b.s:hover,#fase1 button.s:hover{background:var(--acs);border-color:var(--ac)}
+button.b:disabled,#fase1 button:disabled{background:var(--bd);color:var(--mut);border-color:var(--bd);opacity:1}
+button.b.s:disabled,#fase1 button.s:disabled{background:var(--pn-2);color:var(--mut);border-color:var(--bd)}
+button:disabled,textarea:disabled{cursor:not-allowed;transform:none;box-shadow:none}
+textarea:disabled{opacity:.55}
+header .b,.top .b{font-size:11.5px;padding:5px 9px}
+header .b.s,.top .b.s{background:var(--pn-2)}
+#btnMinBot{font-size:11px;padding:3px 9px;border-radius:7px;gap:4px}
+#btnGraf{margin-left:auto}
+
+/* ============================================================
+   Filtros
+   ============================================================ */
+.flt{display:flex;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mut);background:var(--pn)}
+.flt label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.flt label:hover{color:var(--tx)}
+.flt select{max-width:170px}
+
+/* ============================================================
+   Lista de materias
+   ============================================================ */
+.mat{border:1px solid var(--bd);background:var(--pn);border-radius:var(--r);padding:9px 11px;margin-bottom:7px;cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s,transform .15s,background .15s}
+.mat:hover{border-color:var(--ac);box-shadow:var(--sh-1);transform:translateY(-1px)}
+.mat:active{transform:none}
+.mat>b{display:block;padding-right:72px;font-size:13px;font-weight:600;line-height:1.32}
+.mat .n{position:absolute;right:10px;top:9px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--mut);background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:1px 6px}
+.mat small{display:block;font-size:11px;line-height:1.4;margin-top:3px}
+.mat.on{background:var(--acs);border-color:var(--ac);box-shadow:inset 3px 0 0 var(--ac)}
+.mat.off{opacity:.55;background:var(--pn-2);cursor:not-allowed}
+.mat.off:hover{border-color:var(--bd-strong);box-shadow:none;transform:none}
+.t{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px;font-style:normal;font-size:10.5px;font-weight:600;line-height:1.4;padding:2px 7px;border-radius:99px;margin:5px 4px 0 0;background:var(--bd);color:var(--tx);max-width:100%;overflow-wrap:anywhere}
+.t.ok{background:var(--oks);color:var(--ok)}
+.t.bad{background:var(--bads);color:var(--bad)}
+.t.warn{color:var(--wn);background:var(--wns);border:1px solid transparent}
+
+/* separadores de sección pegajosos dentro del panel */
+.sec{position:sticky;top:-10px;z-index:2;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 6px;padding:8px 2px 5px;background:var(--pn)}
+.sec:not(:first-child){margin-top:10px;border-top:1px solid var(--bd)}
+.sec span{display:inline-block;min-width:20px;text-align:center;background:var(--bd);color:var(--mut);border-radius:99px;padding:0 7px;margin-left:4px;font-size:10px;font-variant-numeric:tabular-nums}
+
+/* ============================================================
+   Lista de alumnos
+   ============================================================ */
+.al{border:1px solid var(--bd);border-radius:var(--r);margin-bottom:7px;background:var(--pn);overflow:hidden;transition:border-color .15s,box-shadow .15s,background .15s}
+.al:hover{border-color:var(--bd-strong)}
+.al.sel{border-color:var(--ac);background:var(--acs)}
+.row{display:flex;align-items:center;gap:9px;padding:9px 10px;cursor:pointer}
+.row:hover{background:var(--pn-2)}
+.al.sel .row:hover{background:transparent}
+.who{flex:1;min-width:0}
+.who b,.who small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who b{font-size:13px;font-weight:600}
+.who small{font-size:11px;font-variant-numeric:tabular-nums}
+.arr{border:1px solid var(--bd);background:var(--pn);color:var(--mut);border-radius:8px;width:30px;height:30px;min-width:30px;font-size:11px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .15s,border-color .15s,color .15s}
+.arr:hover{border-color:var(--ac);background:var(--acs);color:var(--ac)}
+.bdg{font-size:10.5px;font-weight:700;min-width:24px;text-align:center;padding:2px 7px;border-radius:99px;background:var(--bd);color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bdg.ok{background:var(--oks);color:var(--ok)}
+.rep{padding:2px 12px 10px 48px;font-size:12.5px}
+.rep ul{margin:0 0 8px;padding:0;list-style:none}
+.rep li{margin-bottom:6px;line-height:1.45}
+.rep li.err{background:var(--bads);color:var(--bad);border-radius:7px;padding:6px 9px;margin-bottom:5px;font-size:12px}
+.rep label{display:flex;align-items:flex-start;gap:8px;padding:4px 6px;border-radius:7px;cursor:pointer;transition:background .15s}
+.rep label:hover{background:var(--pn-2)}
+.rep input[type=checkbox]{margin-top:2px}
+.rep b{font-weight:600}
+
+/* ============================================================
+   Horario
+   ============================================================ */
+.grid{display:grid;min-width:620px;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r)}
+.dh{text-align:center;font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding:8px 0;border-bottom:1px solid var(--bd-strong);background:var(--pn);position:sticky;top:0;z-index:4}
+.hrs div{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--mut);text-align:right;padding-right:8px}
+.col{position:relative;border-left:1px solid var(--bd);background-color:var(--pn);background-image:linear-gradient(var(--bd) 1px,transparent 1px)}
+.col:last-child{background-color:var(--pn-2)}
+.blk{position:absolute;left:2px;right:2px;border-radius:7px;padding:4px 7px;font-size:11.5px;line-height:1.25;cursor:pointer;overflow:hidden;color:#16202f;background:hsl(var(--h) 68% 86%);border-left:3px solid hsl(var(--h) 55% 46%);box-shadow:0 1px 2px rgba(16,24,40,.12);transition:box-shadow .15s,filter .15s}
+.blk:hover{filter:brightness(.97);outline:2px solid var(--bad);outline-offset:1px;box-shadow:var(--sh-2);z-index:3}
+.blk::after{content:"×";position:absolute;top:1px;right:5px;font-size:13px;font-weight:700;line-height:1;opacity:0;color:#a01d18;transition:opacity .15s}
+.blk:hover::after{opacity:1}
+.blk:focus-visible{outline:2px solid var(--ac);outline-offset:2px;z-index:3}
+.blk b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:14px}
+.blk span{display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
+@media(prefers-color-scheme:dark){.blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}.blk::after{color:#5c110d}}
+
+/* ============================================================
+   Panel inferior
+   ============================================================ */
+.bot{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 12px 12px;height:230px}
+.bot.min{height:44px!important;overflow:hidden}
+.bot.min .in{display:none!important}
+.bot .in{padding:12px;display:flex;flex-direction:column;gap:9px;flex:1;min-height:0}
+textarea{flex:1;resize:none;border:1px solid var(--bd-strong);border-radius:var(--r);padding:10px 12px;font:inherit;font-size:13px;line-height:1.5;background:var(--pn-2);color:var(--tx)}
+textarea:focus{outline:none;border-color:var(--ac);background:var(--pn);box-shadow:var(--ring)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+#prev{padding:0}
+
+/* ============================================================
+   Tablas
+   ============================================================ */
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--bd);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--pn-2);color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:1}
+tr:hover td{background:var(--pn-2)}
+#prev table{font-size:12px}
+#prev th,#prev td{padding:5px 8px}
+#prev tr:hover td{background:transparent}
+
+/* ============================================================
+   Fase 1 · filtro de malla
+   ============================================================ */
+#fase1{flex:1;overflow:auto}
+#fase2{flex:1;min-height:0;display:flex;flex-direction:column}
+.f1main{max-width:1120px;margin:0 auto;padding:20px 16px 32px;display:grid;gap:14px}
+#fase1 .card{background:var(--pn);border:1px solid var(--bd);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--sh-1)}
+#fase1 .card h2{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.4}
+#fase1 .card h2::before{content:"";width:3px;height:15px;border-radius:99px;background:var(--ac);flex:none}
+#fase1 .card>label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--mut);max-width:420px}
+#fase1 .frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#fase1 p{margin:8px 0}
+#fase1 ul{margin:8px 0 0;padding:0;list-style:none}
+#fase1 li{padding:7px 0;border-top:1px solid var(--bd);font-size:12.5px;line-height:1.5}
+#fase1 li:first-child{border-top:0;padding-top:2px}
+#fase1 .pill{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--bd);color:var(--mut);margin-left:6px;vertical-align:middle}
+#fase1 .pill.ok{background:var(--oks);color:var(--ok)}
+#fase1 .pill.bad{background:var(--bads);color:var(--bad)}
+#fase1 .tb{overflow:auto;max-height:55vh;margin-top:12px;border:1px solid var(--bd);border-radius:var(--r);background:var(--pn)}
+#fase1 .tb>p{margin:0;padding:14px}
+#fase1 tr.no td{color:var(--mut);text-decoration:line-through;text-decoration-color:var(--bd-strong)}
+#faltan{line-height:2}
+
+/* ============================================================
+   Detalles / código
+   ============================================================ */
+summary{cursor:pointer;font-weight:600;padding:2px 0;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"";width:0;height:0;border-left:5px solid var(--mut);border-top:4px solid transparent;border-bottom:4px solid transparent;flex:none;transition:transform .15s}
+details[open]>summary::before{transform:rotate(90deg)}
+code{background:var(--pn-2);border:1px solid var(--bd);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:.9em}
+.acc{font-size:12px;flex:none}
+.acc>summary{border:1px solid var(--bd-strong);border-radius:8px;padding:6px 10px;background:var(--pn-2);font-weight:600;color:var(--mut);white-space:nowrap}
+.acc>summary:hover{border-color:var(--ac);color:var(--ac)}
+.acc[open]{position:absolute;right:12px;top:calc(100% + 6px);z-index:30;background:var(--pn);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh-2);padding:12px;min-width:250px;max-width:min(320px,calc(100vw - 24px))}
+.acc[open]>summary{margin-bottom:8px}
+.acc label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer;font-size:12.5px;color:var(--tx)}
+.acc label:hover{color:var(--ac)}
+
+/* ============================================================
+   Aviso flotante
+   ============================================================ */
+#aviso{position:fixed;left:50%;top:16px;transform:translate(-50%,-10px);background:var(--ok);color:var(--on-solid);padding:10px 16px 10px 14px;border-radius:var(--r);font-size:13px;font-weight:500;line-height:1.4;box-shadow:var(--sh-2);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:60;max-width:min(92vw,620px);display:flex;align-items:center;gap:8px}
+#aviso::before{content:"✓";display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.22);font-size:11px;font-weight:700;flex:none}
+#aviso.show{opacity:1;transform:translate(-50%,0)}
+#aviso.bad{background:var(--bad)}
+#aviso.bad::before{content:"!"}
+@media(prefers-color-scheme:dark){#aviso::before{background:rgba(0,0,0,.14)}}
+
+body.big{font-size:17px;line-height:1.5}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media(max-width:1280px){main{grid-template-columns:240px minmax(0,1fr) 280px;gap:10px;padding:10px}}
+@media(max-width:1000px){
+  body{height:auto;min-height:100vh}
+  main{grid-template-columns:1fr;gap:10px;padding:10px}
+  main>.pn{max-height:65vh}
+  main>.pn:nth-child(2){min-height:55vh}
+  .bot{grid-template-columns:1fr;height:auto;padding:0 10px 10px}
+  .bot .pn{min-height:220px}
+  #btnGraf{margin-left:0}
+}
+@media(max-width:720px){
+  header,.top{padding:10px 12px;gap:8px}
+  h1{font-size:14px}
+  .load{flex:1 1 140px;font-size:10.5px}
+  header .b,.top .b{font-size:11.5px;padding:5px 8px}
+  .f1main{padding:14px 12px 24px;gap:12px}
+  #fase1 .card{padding:14px}
+  .flt{gap:7px 10px;padding:9px 10px}
+  .row{padding:9px}
+  .rep{padding:2px 10px 10px 12px}
+  .step{font-size:11px;padding:4px 10px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* ============================================================
+   Impresión · solo el horario del alumno
+   ============================================================ */
+@media print{
+  @page{size:landscape;margin:10mm}
+  .top,header,#fase1,.bot,#aviso,#dlgGraf,#btnGraf{display:none!important}
+  body{height:auto;background:#fff;color:#000;display:block;font-size:12px}
+  main{display:block;padding:0;gap:0}
+  main>section:not(:nth-child(2)){display:none!important}
+  .pn{border:0;border-radius:0;box-shadow:none;overflow:visible;background:#fff}
+  .pn>h2{display:none!important}
+  #hor{overflow:visible;padding:0}
+  .grid{min-width:0;border:1px solid #bbb;border-radius:0;overflow:visible}
+  .dh{position:static;color:#333;background:#fff}
+  .col{background-color:#fff}
+  .col:last-child{background-color:#fafafa}
+  .blk{box-shadow:none}
+  .blk::after{display:none}
+  .hrs div{color:#555}
+  .sec{position:static}
+}
+</style>
+</head>
+<body>
+<nav class="top">
+  <h1>Gestor de horarios y reportes</h1>
+  <span id="p1" class="step on">1 · Filtro de malla</span><span class="mut">→</span><span id="p2" class="step">2 · Gestor de horarios</span>
+  <button class="b s" id="volver" hidden>← Volver al filtro</button>
+</nav>
+<div id="fase1">
+<div class="f1main">
+    <section class="card"><h2>Profesor</h2>
+    <label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name"></label>
+  </section>
+  <p class="mut" style="margin:0">Carga la malla principal y los archivos de materias (Excel, CSV o JSON). Solo las materias que están en la malla pasarán al gestor de horarios.</p>
+  <section class="card"><details><summary><b>Estructura recomendada de los archivos</b></summary>
+    <p class="mut">La primera fila son los encabezados (no importan mayúsculas ni tildes). Se aceptan .xlsx (primera hoja), .csv y .json.</p>
+    <p><b>Formato de entrega:</b> <code>Codigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario</code> (separado por punto y coma).<br>Ejemplo: <code>MAT-101;10234;Cálculo I;MAT-100;Lunes y Miércoles 07:00-09:00</code></p>
+    <table><tr><th>Columna</th><th>Encabezados que se reconocen</th><th>Uso</th></tr>
+      <tr><td>Codigo</td><td>Codigo, Cod, ID, Clave, Sigla</td><td>Criterio principal para comparar con la malla</td></tr>
+      <tr><td>Nro_Curso</td><td>Nro_Curso, Nro de Curso, Numero de Curso</td><td>Número del curso (NRC): identifica cada sección en el gestor</td></tr>
+      <tr><td>Materia</td><td>Materia, Nombre, Asignatura</td><td>Respaldo cuando no hay código</td></tr>
+      <tr><td>Prelaciones</td><td>Prelaciones, Prerrequisitos</td><td>Se conserva en el archivo; el gestor asume los prerrequisitos cumplidos y no los muestra</td></tr>
+      <tr><td>Horario</td><td>Horario, Dias y Horas</td><td>Texto como «Lunes y Miércoles 07:00-09:00»; el gestor lo necesita para armar el horario</td></tr>
+    </table>
+    <p><b>Correquisitos</b> = Nro_Curso de la sección que va junta. Si es <u>el mismo Nro_Curso</u> de la fila (Física y su laboratorio) se ven juntas y se agregan o quitan juntas. Si es <u>otro Nro_Curso</u>, esa materia lo exige aprobado (<code>materias_aprobadas</code> del alumno en el data.json) o inscrito en el mismo semestre.</p><p class="mut">La malla debe tener al menos Codigo o Materia. Cualquier otra columna se conserva en «Otros datos». Al comparar nombres se pasa a MAYÚSCULAS, se quitan tildes, signos y espacios sobrantes, y I, II, III… equivalen a 1, 2, 3… (“Cálculo I ” = “CALCULO 1”).</p>
+    <button class="s" id="bPlant">Descargar plantilla CSV</button></details></section>
+  <section class="card">
+    <h2>1 · Malla curricular principal</h2>
+    <input type="file" id="fMalla" accept=".xlsx,.csv,.json,.txt">
+    <div id="infoMalla" class="mut" style="margin-top:8px">Aún no se ha cargado la malla.</div>
+  </section>
+  <section class="card">
+    <h2>2 · Archivos de materias (distintas carreras y secciones)</h2>
+    <div class="frow"><input type="file" id="fArch" multiple accept=".xlsx,.csv,.json,.txt"><button class="s" id="bLimpiar">Limpiar archivos</button></div>
+    <ul id="lista"></ul>
+  </section>
+  <section class="card">
+    <h2>Materias que pertenecen a la malla <span id="cnt" class="pill ok">0</span></h2>
+    <div class="frow">
+      <button id="bExp" disabled>Descargar Excel (.xlsx)</button>
+      <button class="s" id="bCsv" disabled>Descargar CSV</button>
+      <label class="mut"><input type="checkbox" id="verNo"> Mostrar también las descartadas (auditoría)</label>
+    </div>
+    <div class="tb" id="res"><p class="mut">Carga la malla y al menos un archivo.</p></div>
+  </section>
+  <section class="card">
+    <h2>Materias de la malla sin oferta en los archivos cargados</h2>
+    <div id="faltan" class="mut">—</div>
+  </section>
+  <section class="card"><h2>3 · Continuar</h2><div class="frow">
+    <button id="bGo" disabled>Continuar al gestor de horarios →</button>
+    <button class="s" id="bSkip">Omitir filtro (usar las materias del data.json)</button>
+    <span class="mut" id="goInfo"></span></div></section>
+</div>
+</div>
+<div id="fase2" hidden>
+<header>
+  <label class="load">data.json de alumnos y reportes<input type="file" id="fDat" accept=".json"></label>
+  <label class="load" title="Archivo con solo cédula y materias inscritas (virtual). Se vincula por cédula con los alumnos de los reportes.">Detalles de inscripción<input type="file" id="fIns" accept=".xlsx,.csv,.json,.txt"></label>
+  <button class="b s" id="btnResetSt" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
+  <span id="estado" class="mut">Sin datos cargados</span>
+  <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Permitir deshacer (botón y Ctrl+Z)</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
+  <button class="b s" id="btnUndo" hidden>↶ Deshacer</button>
+  <button class="b s" id="btnRedo" hidden>↷ Rehacer</button>
+  <button class="b s" id="btnPrint">Imprimir horario</button>
+  <button class="b s" id="btnResp">Respaldo ⬇</button>
+  <button class="b s" id="btnRest">Cargar ⬆</button><input type="file" id="fResp" accept=".json" hidden>
+</header>
+<main>
+  <section class="pn"><h2>Materias</h2><div class="flt"><input id="qMat" placeholder="Buscar: nombre, código, día…"></div><div class="sc" id="mats"></div></section>
+  <section class="pn"><h2>Horario (clic en una materia para agregarla; clic en un bloque para quitarla)</h2><div class="sc" id="hor"></div></section>
+  <section class="pn"><h2>Alumnos</h2>
+    <div class="flt">
+      <label>Tipo <select id="fPerfil"><option value="">Todos los tipos</option></select></label>
+      <label><input type="checkbox" id="fOcultar"> Ocultar los listos</label>
+      <span id="fCnt" style="width:100%"></span>
+    </div>
+    <div class="sc" id="als"></div></section>
+</main>
+<div class="bot" id="botPanel">
+  <section class="pn"><h2 style="display:flex;justify-content:space-between;align-items:center"><span>Comentarios · <span id="quien">Selecciona un alumno</span></span><button class="b s" id="btnMinBot">─ Minimizar</button></h2>
+    <div class="in">
+      <textarea id="nota" placeholder="Resolución del problema del alumno…"></textarea>
+      <div class="btns"><button class="b" id="btnListo">Marcar alumno como listo</button></div>
+    </div></section>
+  <section class="pn"><h2>Exportación a Excel (simulada)</h2>
+    <div class="in"><div class="sc" id="prev" style="padding:0"></div>
+      <div class="btns"><button class="b s" id="btnExp">Exportar a Excel (.csv)</button></div></div></section>
+</div>
+</div>
+<div id="aviso"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* nombre: MAYÚSCULAS, sin tildes ni signos, sin espacios sobrantes y números romanos como arabigos ("Cálculo I " = "CALCULO 1") */
+const ROM={I:1,II:2,III:3,IV:4,V:5,VI:6,VII:7,VIII:8,IX:9,X:10};
+const nz=s=>String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim().split(' ').map(w=>ROM[w]||w).join(' ');
+/* código: "MAT-101" == "mat 101" == "MAT101"; los numéricos ignoran ceros a la izquierda */
+const nc=s=>{const c=String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');return /^\d+$/.test(c)?c.replace(/^0+(?=\d)/,''):c};
+
+let malla=null,archivos=[];
+
+/* ---------- lectura y parseo ---------- */
+async function leerTexto(f){const b=await f.arrayBuffer();
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(e){return new TextDecoder('windows-1252').decode(b)}}
+function csv(t){
+  t=t.replace(/^\uFEFF/,'').replace(/^sep=.\r?\n/i,'');
+  const first=t.split(/\r?\n/,1)[0];
+  const sep=[';','\t',','].map(s=>[s,first.split(s).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let r=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===sep){r.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;r.push(f);rows.push(r);r=[];f=''}
+    else f+=c}
+  if(f||r.length){r.push(f);rows.push(r)}
+  const H=(rows.shift()||[]).map(x=>x.trim());
+  return rows.filter(x=>x.some(v=>v.trim())).map(x=>Object.fromEntries(H.map((h,i)=>[h,(x[i]||'').trim()])));
+}
+const flat=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,Array.isArray(v)?v.join(', '):(v&&typeof v==='object'?JSON.stringify(v):v)]));
+function jrows(j){
+  if(Array.isArray(j))return j.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(flat);
+  for(const k in j){const v=j[k];if(Array.isArray(v)&&v.length&&v[0]&&typeof v[0]==='object')return jrows(v)}
+  return[];
+}
+const KC=['CODIGO','COD','ID','CLAVE','NRC','SIGLA'],KN=['NOMBRE','MATERIA','ASIGNATURA','CURSO','NAME'];
+/* formato de entrega: Codigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario */
+const KNRO=['NRO CURSO','NRO DE CURSO','NUMERO CURSO','NUMERO DE CURSO','NRO'],KPRE=['PRELACIONES','PRELACION','PRERREQUISITOS','PRERREQUISITO'],KHOR=['HORARIO','DIAS Y HORAS','DIA Y HORA','DIAS','FECHA Y HORA','HORA'],KCOR=['CORREQUISITOS','CORREQUISITO'];
+function columna(keys,L,excluir){
+  const ok=k=>!(excluir&&/PROFESOR|DOCENTE|ALUMNO|ESTUDIANTE/.test(nz(k)));
+  return keys.find(k=>ok(k)&&L.includes(nz(k)))||keys.find(k=>ok(k)&&L.some(x=>nz(k).startsWith(x+' ')))||null;
+}
+async function parsear(nombre,dato){
+  if(dato==null)throw new Error('no se pudo leer el archivo');
+  if(/\.xls$/i.test(nombre))throw new Error('formato .xls antiguo: guárdalo como .xlsx o .csv');
+  if(!/\.(csv|json|txt|xlsx)$/i.test(nombre))throw new Error('formato no admitido (usa .xlsx, .csv o .json)');
+  let rows;
+  if(/\.xlsx$/i.test(nombre))rows=await xlsxRows(dato);
+  else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrows(JSON.parse(dato.replace(/^\uFEFF/,'')));
+  else rows=csv(dato);
+  if(!rows.length)throw new Error('no se encontraron filas');
+  const keys=[...new Set(rows.slice(0,300).flatMap(r=>Object.keys(r)))],c=columna(keys,KC,false),n=columna(keys,KN,true),nr=columna(keys,KNRO,false),pr=columna(keys,KPRE,false),ho=columna(keys,KHOR,false),co=columna(keys,KCOR,false);
+  if(!c&&!n)throw new Error('no hay columna de código ni de nombre de materia');
+  const items=rows.map(r=>{
+    const extra=Object.entries(r).filter(([k,v])=>![c,n,nr,pr,ho,co].includes(k)&&String(v).trim()!=='').map(([k,v])=>k+': '+v).join(' · ');
+    return{code:c?nc(r[c]):'',name:n?nz(r[n]):'',rawCode:c?r[c]:'',rawName:n?r[n]:'',nro:nr?r[nr]:'',pre:pr?r[pr]:'',cor:co?r[co]:'',hor:ho?r[ho]:'',extra,row:r};
+  }).filter(it=>it.code||it.name);
+  return{items,c,n,ho:!!ho};
+}
+
+/* ---------- lector .xlsx sin librerías ---------- */
+async function inflar(u8){const ds=new DecompressionStream('deflate-raw'),w=ds.writable.getWriter();w.write(u8);w.close();return new Uint8Array(await new Response(ds.readable).arrayBuffer())}
+async function xlsxRows(buf){
+  if(typeof DecompressionStream==='undefined')throw new Error('este navegador no puede leer .xlsx; usa .csv');
+  const u=new Uint8Array(buf),dv=new DataView(buf),dec=new TextDecoder();
+  let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;
+  if(e<0)throw new Error('el archivo .xlsx está dañado o no es un Excel válido');
+  const n=dv.getUint16(e+10,true),files={};let p=dv.getUint32(e+16,true);
+  for(let i=0;i<n;i++){
+    const nl=dv.getUint16(p+28,true);
+    files[dec.decode(u.subarray(p+46,p+46+nl))]={m:dv.getUint16(p+10,true),cs:dv.getUint32(p+20,true),o:dv.getUint32(p+42,true)};
+    p+=46+nl+dv.getUint16(p+30,true)+dv.getUint16(p+32,true);
+  }
+  const leerX=async nm=>{const f=files[nm];if(!f)return null;
+    const s=f.o+30+dv.getUint16(f.o+26,true)+dv.getUint16(f.o+28,true),d=u.subarray(s,s+f.cs);
+    return dec.decode(f.m===0?d:await inflar(d))};
+  let hoja=null;
+  try{const px=s=>new DOMParser().parseFromString(s,'application/xml'),wbx=await leerX('xl/workbook.xml'),rlx=await leerX('xl/_rels/workbook.xml.rels');
+    if(wbx&&rlx){const s0=px(wbx).getElementsByTagName('sheet')[0],rid=s0&&(s0.getAttribute('r:id')||s0.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')),
+      rel=[...px(rlx).getElementsByTagName('Relationship')].find(r=>r.getAttribute('Id')===rid);
+      if(rel){const tg=rel.getAttribute('Target').replace(/^\//,'');hoja=tg.startsWith('xl/')?tg:'xl/'+tg}}}catch(e){}
+  if(!hoja||!files[hoja])hoja=files['xl/worksheets/sheet1.xml']?'xl/worksheets/sheet1.xml':Object.keys(files).filter(k=>/^xl\/worksheets\/[^/]+\.xml$/.test(k)).sort()[0];
+  if(!hoja)throw new Error('no se encontró ninguna hoja en el .xlsx');
+  const xml=s=>new DOMParser().parseFromString(s,'application/xml');
+  const sst=await leerX('xl/sharedStrings.xml'),ss=sst?[...xml(sst).getElementsByTagName('si')].map(x=>x.textContent):[];
+  const col=r=>{let k=0;for(const ch of r.replace(/[^A-Z]/g,''))k=k*26+ch.charCodeAt(0)-64;return k-1};
+  const rows=[...xml(await leerX(hoja)).getElementsByTagName('row')].map(r=>{
+    const a=[];
+    for(const c of r.getElementsByTagName('c')){
+      const t=c.getAttribute('t'),v=c.getElementsByTagName('v')[0];
+      a[col(c.getAttribute('r')||'A')]=t==='s'&&v?ss[+v.textContent]:t==='inlineStr'?c.textContent:v?v.textContent:'';
+    }return a});
+  const H=(rows.shift()||[]).map(x=>String(x==null?'':x).trim());
+  return rows.filter(r=>r.some(v=>String(v==null?'':v).trim())).map(r=>Object.fromEntries(H.map((h,i)=>[h,String(r[i]==null?'':r[i]).trim()]).filter(([h])=>h)));
+}
+
+/* ---------- carga ---------- */
+async function ingest(tipo,nombre,dato){
+  let p,error=null;
+  try{p=await parsear(nombre,dato)}catch(e){error=e.message}
+  if(tipo==='malla'){
+    if(error){malla=null;$('infoMalla').innerHTML='<span class="err">No se pudo leer «'+esc(nombre)+'»: '+esc(error)+'.</span>'}
+    else{
+      malla={nombre,entries:p.items,byCode:new Map(),byName:new Map()};
+      for(const e of p.items){if(e.code)malla.byCode.set(e.code,e);if(e.name&&!malla.byName.has(e.name))malla.byName.set(e.name,e)}
+      const cc=p.items.filter(e=>e.code).length;
+      $('infoMalla').innerHTML='<b>'+esc(nombre)+'</b>: '+p.items.length+' materias en la lista blanca ('+cc+' con código, '+(p.items.length-cc)+' solo con nombre). '+
+        'Criterio: <b>código</b> si existe; si no, <b>nombre</b>.';
+    }
+  }else{
+    archivos=archivos.filter(a=>a.nombre!==nombre);
+    archivos.push({nombre,items:p?p.items:[],error,ho:p?p.ho:false});
+  }
+  renderFiltro();
+}
+async function desdeArchivo(tipo,f){
+  let d=null;
+  try{d=/\.xlsx$/i.test(f.name)?await f.arrayBuffer():await leerTexto(f)}catch(e){}
+  await ingest(tipo,f.name,d);
+}
+$('fMalla').onchange=async e=>{const f=e.target.files[0];if(f)await desdeArchivo('malla',f)};
+$('fArch').onchange=async e=>{const fs=[...e.target.files];for(const f of fs)await desdeArchivo('arch',f);e.target.value=''};
+$('bLimpiar').onclick=()=>{archivos=[];renderFiltro()};
+$('verNo').onchange=renderFiltro;
+
+/* ---------- filtrado: código primero, nombre como respaldo ---------- */
+function evaluar(it){
+  if(it.code){
+    if(malla.byCode.has(it.code))return[malla.byCode.get(it.code),'código'];
+    const e=malla.byName.get(it.name);
+    return e&&!e.code?[e,'nombre']:null;
+  }
+  const e=malla.byName.get(it.name);
+  return e?[e,'nombre']:null;
+}
+let aceptadas=[];
+function renderFiltro(){
+  const ok=[],no=[],cubiertas=new Set(),porArchivo=[];
+  if(malla){
+    for(const a of archivos){
+      let y=0,n=0;
+      for(const it of a.items){
+        const m=evaluar(it);
+        if(m){y++;cubiertas.add(m[0]);if(m[0].code)malla.entries.forEach(e=>{if(e.code===m[0].code)cubiertas.add(e)});ok.push({a:a.nombre,it,por:m[1]})}else{n++;no.push({a:a.nombre,it})}
+      }
+      porArchivo.push([a,y,n]);
+    }
+  }
+  aceptadas=ok;
+  $('lista').innerHTML=archivos.length?archivos.map(a=>{
+    const f=porArchivo.find(x=>x[0]===a);
+    return '<li><b>'+esc(a.nombre)+'</b>'+(a.error?' <span class="err">— '+esc(a.error)+'</span>':
+      ' <span class="pill">'+a.items.length+' filas</span>'+(a.ho?'':'<span class="pill bad">sin columna Horario</span>')+(f?'<span class="pill ok">'+f[1]+' en la malla</span><span class="pill bad">'+f[2]+' descartadas</span>':''))+'</li>';
+  }).join(''):'<li class="mut">Sin archivos cargados.</li>';
+
+  $('cnt').textContent=ok.length;$('bExp').disabled=$('bCsv').disabled=$('bGo').disabled=!ok.length;$('goInfo').textContent=ok.length?ok.length+' materia(s) pasarán al gestor de horarios.':'';
+  if(!malla){$('res').innerHTML='<p class="mut">Primero carga la malla curricular principal.</p>';$('faltan').textContent='—';return}
+  const ver=$('verNo').checked,filas=ok.map(x=>({...x,s:1})).concat(ver?no.map(x=>({...x,s:0})):[]);
+  $('res').innerHTML=filas.length?'<table><tr><th>Archivo</th><th>Codigo</th><th>Nro_Curso</th><th>Materia</th><th>Prelaciones</th><th>Correquisitos</th><th>Horario</th>'+(ver?'<th>Estado</th>':'')+'<th>Coincidió por</th><th>Otros datos</th></tr>'+
+    filas.map(x=>'<tr'+(x.s?'':' class="no"')+'><td>'+esc(x.a)+'</td><td>'+esc(x.it.rawCode)+'</td><td>'+esc(x.it.nro)+'</td><td>'+esc(x.it.rawName)+'</td><td>'+esc(x.it.pre)+'</td><td>'+esc(x.it.cor)+'</td><td>'+esc(x.it.hor)+'</td>'+(ver?'<td>'+(x.s?'En la malla':'Descartada'+(malla.byName.has(x.it.name)?' · ⚠ el nombre coincide con la malla (revisar código)':''))+'</td>':'')+
+      '<td>'+(x.s?esc(x.por):'—')+'</td><td>'+esc(x.it.extra)+'</td></tr>').join('')+'</table>'
+    :'<p class="mut">'+(archivos.length?'Ninguna materia de los archivos pertenece a la malla.':'Carga al menos un archivo de materias.')+'</p>';
+  const falt=malla.entries.filter(e=>!cubiertas.has(e));
+  $('faltan').innerHTML=!archivos.length?'—':falt.length?falt.map(e=>'<span class="pill bad">'+esc(e.rawCode?e.rawCode+' · ':'')+esc(e.rawName)+'</span>').join(' '):'<span class="pill ok">Todas las materias de la malla tienen oferta.</span>';
+}
+/* ---------- descarga: .xlsx real (zip sin comprimir) y .csv ---------- */
+const CRC=(()=>{const T=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;T[n]=c>>>0}return T})();
+const crc32=u=>{let c=0xFFFFFFFF;for(const b of u)c=CRC[(c^b)&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+function zip(files){
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  for(const f of files){
+    const nm=enc.encode(f.name),d=enc.encode(f.data),crc=crc32(d);
+    const lh=new Uint8Array(30+nm.length),v=new DataView(lh.buffer);
+    v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x0800,true);
+    v.setUint32(14,crc,true);v.setUint32(18,d.length,true);v.setUint32(22,d.length,true);v.setUint16(26,nm.length,true);lh.set(nm,30);
+    const ch=new Uint8Array(46+nm.length),c=new DataView(ch.buffer);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);ch.set(nm,46);
+    parts.push(lh,d);cen.push(ch);off+=lh.length+d.length;
+  }
+  const end=new Uint8Array(22),e=new DataView(end.buffer);
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,cen.reduce((n,x)=>n+x.length,0),true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function xlsx(filas){
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',R='http://schemas.openxmlformats.org/package/2006/relationships',O='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const limpio=v=>esc(String(v==null?'':v).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,''));
+  const hoja=H+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+filas.map((r,i)=>'<row r="'+(i+1)+'">'+
+    r.map((v,j)=>'<c r="'+String.fromCharCode(65+j)+(i+1)+'" t="inlineStr"><is><t xml:space="preserve">'+limpio(v)+'</t></is></c>').join('')+'</row>').join('')+'</sheetData></worksheet>';
+  return zip([
+    {name:'[Content_Types].xml',data:H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+    {name:'_rels/.rels',data:H+'<Relationships xmlns="'+R+'"><Relationship Id="rId1" Type="'+O+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml',data:H+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+O+'"><sheets><sheet name="Materias en la malla" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',data:H+'<Relationships xmlns="'+R+'"><Relationship Id="rId1" Type="'+O+'/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
+    {name:'xl/worksheets/sheet1.xml',data:hoja}]);
+}
+function descargar(blob,nombre){
+  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+}
+const filasExport=()=>[['Codigo','Nro_Curso','Materia','Prelaciones','Correquisitos','Horario','Archivo','Coincidio por','Otros datos']].concat(aceptadas.map(x=>[x.it.rawCode,x.it.nro,x.it.rawName,x.it.pre,x.it.cor,x.it.hor,x.a,x.por,x.it.extra]));
+$('bExp').onclick=()=>{try{descargar(xlsx(filasExport()),'materias_en_malla.xlsx')}catch(e){alert('No se pudo generar el Excel: '+e.message)}};
+$('bCsv').onclick=()=>{
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/^([=+\-@])/,"'$1")+'"';
+  descargar(new Blob(['\uFEFFsep=;\r\n'+filasExport().map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'materias_en_malla.csv');
+};
+$('bPlant').onclick=()=>descargar(new Blob(['\uFEFFsep=;\r\nCodigo;Nro_Curso;Materia;Prelaciones;Correquisitos;Horario\r\nFIS-101;10300;Fisica I;MAT-101;10300;Lunes y Viernes 11:00-13:00\r\nFIS-101L;10300;Laboratorio de Fisica I;;10300;Viernes 14:00-16:00\r\n'],{type:'text/csv;charset=utf-8'}),'plantilla_materias.csv');
+
+
+const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],DIAS={lunes:0,martes:1,miercoles:2,jueves:3,viernes:4,sabado:5,domingo:6};
+const norm=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const pad=n=>String(n).padStart(2,'0'),fmt=h=>pad(Math.floor(h))+':'+pad(Math.round((h%1)*60));
+let materias=[],matsArchivo=null,datos=null,alumnos=[],reportes=[],sel=null,st={},tm,insc=null,inscStats=null;
+const abiertos=new Set();
+try{st=JSON.parse(localStorage.getItem('hr_estado')||'{}')}catch(e){}
+let gt=0;const guardarYa=()=>{clearTimeout(gt);gt=0;try{localStorage.setItem('hr_estado',JSON.stringify(st))}catch(e){}};
+const guardar=()=>{clearTimeout(gt);gt=setTimeout(guardarYa,300)};                        // no serializa todo en cada tecla
+addEventListener('beforeunload',()=>{if(gt)guardarYa()});addEventListener('pagehide',()=>{if(gt)guardarYa()});
+const get=()=>{const k=sel||'_libre';return st[k]=st[k]||{n:[],nota:'',listo:false}};
+
+/* Normalización estricta de códigos y NRCs */
+const normCode = nc;
+let idx1=new Map(),idx2=new Map(),repBy=new Map(),rcache=new Map(),acache=new Map();
+const byNrc=n=>{const k=normCode(n);return k?(idx1.get(k)||idx2.get(k)||null):null};
+function canonN(arr){const ok=[],fuera=[],seen=new Set();for(const n of arr||[]){const s=String(n).trim(),m=byNrc(s),v=m?m.nrc:s,k=normCode(v);if(!k||seen.has(k))continue;seen.add(k);(m?ok:fuera).push(v)}return{ok,fuera}}
+
+const hayRep=()=>!!(datos&&Array.isArray(datos.reportes));
+/* Tipos de error de Page_reports (mismo catálogo que lib/catalogos.ts). Los de TIPOS_CAMBIO permiten
+   ofrecer otra sección de la materia reportada; «Error de prerrequisito» es solo informativo: se muestra
+   en pantalla pero no bloquea la inscripción. Con el resto la materia queda bloqueada hasta resolver el reporte. */
+const TIPOS_ERROR=['Error de prerrequisito','Error de correquisito','Reserva cerrada','Cruce de horario','Cambio de horario','Otros'];
+const TIPOS_CAMBIO=['cruce de horario','cambio de horario'];
+const TIPOS_SOLO_AVISO=['error de prerrequisito'];
+const permiteCambio=r=>typeof r.permite_cambio==='boolean'?r.permite_cambio:(TIPOS_CAMBIO.includes(norm(r.tipo_error||'').trim())||/cambio|cruce|choque/.test(norm(r.tipo_error||'')));
+const esSoloAviso=r=>TIPOS_SOLO_AVISO.includes(norm(r.tipo_error||'').trim());   // se muestra, no bloquea
+const permiteInscribir=r=>permiteCambio(r)||esSoloAviso(r);
+/* El Nro_Curso se repite entre carreras (02002 existe en FING, MECA y TELE): si el reporte trae el código
+   único de la materia (cod) se enlaza por código; solo sin cod se usa el NRC (archivos antiguos). */
+const matDe=r=>r.cod?byNrc(r.cod):byNrc(r.nrc);
+const repEsDe=(r,m)=>r.cod?normCode(r.cod)===normCode(m.cod):[m.nrc,m.cod].filter(Boolean).map(normCode).includes(normCode(r.nrc));
+const nomRep=r=>{const m=matDe(r);return m?'['+m.nrc+'] '+m.nombre:(r.materia?r.materia+' (no está en la oferta cargada)':'NRC '+r.nrc)};
+
+function aviso(t,bad){const a=$('aviso');a.textContent=t;a.className='show'+(bad?' bad':'');clearTimeout(tm);tm=setTimeout(()=>a.className='',3800)}
+
+/* ---------- horarios: "Lunes y Miércoles 07:00-09:00" -> [{d,s,e}] ---------- */
+function slots(h){
+  const t=norm(h).replace(/[–—]/g,'-'),out=[],D=['lun','mar','mie','jue','vie','sab','dom'];
+  const re=/(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?\s*(?:-|a)\s*(\d{1,2})(?::|h)(\d{2})\s*(am|pm)?/g;
+  const hh=(x,mi,ap)=>{x=+x;if(ap==='pm'&&x<12)x+=12;if(ap==='am'&&x===12)x=0;return x+mi/60};
+  let m,last=0,prevD=[];
+  while((m=re.exec(t))){
+    const seg=t.slice(last,m.index);last=re.lastIndex;
+    const e=hh(m[4],+m[5],m[6]);let st0=hh(m[1],+m[2],m[3]||m[6]);if(st0>=e)st0=hh(m[1],+m[2],m[3]);
+    const dr=/(lun|mar|mie|jue|vie|sab|dom)[a-z]*(?:\s*(?:a|al|-)\s*(lun|mar|mie|jue|vie|sab|dom)[a-z]*)?/g;let d;
+    const ds=[];while((d=dr.exec(seg))){const i=D.indexOf(d[1]),j=d[2]?D.indexOf(d[2]):i;for(let k=i;k<=j;k++)ds.push(k)}
+    const dias=ds.length?ds:prevD;prevD=dias;dias.forEach(k=>out.push({d:k,s:st0,e}));
+  }
+  return out}
+const tok=s=>String(s==null?'':s).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);   // solo para correquisitos (NRC numéricos)
+const choca=(a,b)=>a.some(x=>b.some(y=>x.d===y.d&&x.s<y.e&&y.s<x.e));
+const conflictosCon=m=>get().n.filter(n=>normCode(n)!==normCode(m.nrc)).map(byNrc).filter(o=>o&&choca(o.sl,m.sl));
+
+/* ---------- carga de archivos ---------- */
+const normM=a=>(a||[]).map(m=>{
+  const rawNrc = m.nrc != null ? String(m.nrc).trim() : String(m.codigo || m.cod || m.Nro_Curso || m.nro || '').trim();
+  const nombre = m.nombre || m.materia || m.rawName || '';
+  const horario = m.horario || m.hor || '';
+  const profesor = m.profesor || '';
+  const det = m.det || [m.nro && 'Curso '+m.nro].filter(Boolean).join(' · ');
+  return {
+    nrc: rawNrc,
+    cod: String(m.cod || rawNrc).trim(),
+    nro: String(m.nro || rawNrc).trim(),
+    nombre,
+    horario,
+    profesor,
+    det,
+    coreq:tok(m.correquisitos||m.coreq),cred:+(m.cred||m.creditos||m.uc)||0,cupo:+m.cupo||0,sl: m.sl || slots(horario)
+  };
+}).filter(m => m.nrc && m.nombre);
+
+function leer(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{cb(String(r.result).replace(/^\uFEFF/,''),f.name)}catch(e){aviso('No se pudo leer '+f.name+': '+e.message,true)}};
+  r.readAsText(f,'utf-8')}
+const hash=t=>{let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return String(h)};
+const limpiarUndo=()=>{undoSt.length=0;redoSt.length=0};
+const respaldoAuto=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_automatico_horarios.json');
+const hayEstado=()=>Object.keys(st).some(k=>k==='probs'?Object.values(st.probs||{}).some(Boolean):k!=='sig'&&st[k]&&typeof st[k]==='object'&&(st[k].ed||st[k].nota||st[k].listo));
+function cargarDatos(nd){
+  const sg=nd._sig||'';
+  if(st.sig&&sg&&st.sig!==sg){
+    if(hayEstado()){
+      if(!confirm('Este data.json es distinto al de la sesión anterior. Si continúas se borrarán los horarios editados, las notas, los «listo» y los checks guardados (antes se descargará un respaldo automático). ¿Continuar?'))return aviso('Carga cancelada: se conservó el estado anterior.');
+      respaldoAuto();
+    }
+    st={};                       // nunca reutilizar alumnos cacheados de otro data.json
+  }
+  limpiarUndo();datos=nd;aplicar();
+}
+$('fDat').onchange=()=>{leer($('fDat'),t=>{const nd=JSON.parse(t);nd._sig=hash(t);cargarDatos(nd);if(insc&&datos===nd)resumenInsc()});$('fDat').value=''};
+
+/* ---------- detalles de inscripción: solo cédula + materias inscritas (virtual) ----------
+   Formatos aceptados (.xlsx, .csv, .json), una fila por materia o una fila por alumno con varias:
+     Cedula;Codigo            Cedula;Nro_Curso           Cedula;Materia           Cedula;Materias inscritas
+   Cada materia se puede identificar por código, NRC / Nro_Curso o nombre (si hay varios datos, se usan para desambiguar). */
+const KCI=['CI','C I','CEDULA','CEDULA DE IDENTIDAD','DOCUMENTO','DOCUMENTO DE IDENTIDAD','IDENTIFICACION','NRO DOCUMENTO','NUMERO DE DOCUMENTO'],
+      KMAT=['MATERIA','NOMBRE MATERIA','NOMBRE DE MATERIA','NOMBRE DE LA MATERIA','ASIGNATURA'],
+      KLST=['MATERIAS INSCRITAS','MATERIAS INSCRIPTAS','MATERIAS','INSCRITAS','INSCRIPTAS','ASIGNATURAS','ASIGNATURAS INSCRITAS','CURSOS','CURSOS INSCRITOS','NRC INSCRITOS'];
+const ciKey=s=>{const raw=String(s==null?'':s).trim(),d=raw.replace(/\D/g,'');return d||raw.toUpperCase()};   // "V-28.123.456" == "28123456"
+const pareceCod=x=>/^[A-Za-z]{0,6}[- ]?\d+[A-Za-z]?$/.test(x.trim());
+function partirLista(v){
+  const s=String(v==null?'':v).trim();if(!s)return[];
+  let a=s.split(/\s*[;|\n]\s*/).map(x=>x.trim()).filter(Boolean);
+  if(a.length===1&&a[0].includes(',')){const b=a[0].split(/\s*,\s*/).filter(Boolean);if(b.every(pareceCod))a=b}   // las comas solo separan códigos/NRC (los nombres pueden llevar comas)
+  return a}
+function jrowsIns(j){
+  const cel=v=>Array.isArray(v)?v.map(x=>x&&typeof x==='object'?(x.cod||x.codigo||x.nrc||x.nro||x.nro_curso||x.nombre||x.materia||''):x).join(' ; '):(v&&typeof v==='object'?JSON.stringify(v):v);
+  const fl=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,cel(v)]));
+  if(Array.isArray(j))return j.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map(fl);
+  if(j&&typeof j==='object'){
+    const ks=Object.keys(j);
+    if(ks.length&&ks.every(k=>/\d/.test(k)&&(Array.isArray(j[k])||typeof j[k]==='string')))return ks.map(k=>({ci:k,materias:cel(j[k])}));      // {"28123456":["FING-02002",…]}
+    for(const k of ks)if(Array.isArray(j[k])&&j[k].length&&j[k][0]&&typeof j[k][0]==='object')return jrowsIns(j[k])}
+  return[]}
+async function parsearInsc(nombre,dato){
+  if(dato==null)throw new Error('no se pudo leer el archivo');
+  if(/\.xls$/i.test(nombre))throw new Error('formato .xls antiguo: guárdalo como .xlsx o .csv');
+  if(!/\.(csv|json|txt|xlsx)$/i.test(nombre))throw new Error('formato no admitido (usa .xlsx, .csv o .json)');
+  let rows;
+  if(/\.xlsx$/i.test(nombre))rows=await xlsxRows(dato);
+  else if(/\.json$/i.test(nombre)||/^\s*[\[{]/.test(dato))rows=jrowsIns(JSON.parse(dato.replace(/^\uFEFF/,'')));
+  else rows=csv(dato);
+  if(!rows.length)throw new Error('no se encontraron filas');
+  const keys=[...new Set(rows.slice(0,300).flatMap(r=>Object.keys(r)))],
+        ci=columna(keys,KCI,false),
+        nomAl=columna(keys,['NOMBRE','ALUMNO','ESTUDIANTE'],false),
+        est=columna(keys,['ESTATUS','ESTADO','STATUS'],false);
+  if(!ci)throw new Error('no hay columna de cédula (Cedula, CI…)');
+  const rest=keys.filter(k=>![ci,nomAl,est].includes(k)),
+        lst=columna(rest,KLST,false),
+        cod=columna(rest.filter(k=>k!==lst),KC,false),
+        nro=columna(rest.filter(k=>k!==lst&&k!==cod),KNRO,false),
+        nom=columna(rest.filter(k=>k!==lst&&k!==cod&&k!==nro),KMAT,true),
+        suj=columna(rest.filter(k=>![lst,cod,nro,nom].includes(k)),['SUBJECT','PREFIJO'],false),
+        crn=columna(rest.filter(k=>![lst,cod,nro,nom,suj].includes(k)),['CRN'],false);
+  if(!lst&&!cod&&!nro&&!nom)throw new Error('no hay columna de materias inscritas');
+  const porCi=new Map(),nombresCi=new Map();let sinCi=0,filas=0;
+  for(const r of rows){
+    if(est && String(r[est]||'').trim().toUpperCase()!=='RW')continue;
+    const k=ciKey(r[ci]);if(!k){sinCi++;continue}
+    if(nomAl && r[nomAl])nombresCi.set(k,String(r[nomAl]).trim());
+    const es=porCi.get(k)||[];
+    const e0={cod:cod?String(r[cod]||'').trim():(suj&&nro&&String(r[suj]||'').trim()&&String(r[nro]||'').trim()?String(r[suj]).trim()+'-'+String(r[nro]).trim():''),
+      nro:nro?String(r[nro]||'').trim():'',nom:nom?String(r[nom]||'').trim():'',crn:crn?String(r[crn]||'').trim():'',tok:''};
+    if(e0.cod||e0.nro||e0.nom)es.push(e0);
+    if(lst)partirLista(r[lst]).forEach(tk=>es.push({cod:'',nro:'',nom:'',tok:tk}));
+    porCi.set(k,es);filas++}
+  if(!porCi.size)throw new Error('ninguna fila trae cédula con estatus RW');
+  return{porCi,nombresCi,filas,sinCi,cols:{ci,nomAl,est,lst,cod,nro,nom,suj,crn}}}
+
+/* una materia inscrita -> sección de la oferta cargada; sin adivinar: si hay varias secciones con distinto horario es ambigua */
+function resolverUna(e){
+  const nk=normCode,cod=e.cod&&nk(e.cod),nro=e.nro&&nk(e.nro),nom=e.nom&&nz(e.nom),tok=e.tok&&nk(e.tok),tokN=e.tok&&nz(e.tok),crn=e.crn&&nk(e.crn);
+  let crnNoExiste=false;
+  if(crn){const x=materias.filter(m=>nk(m.nrc)===crn&&(!(cod||nom)||(cod&&nk(m.cod)===cod)||(nom&&nz(m.nombre)===nom)));if(x.length===1)return{m:x[0]};crnNoExiste=!x.length}   // sección exacta
+  const porCod=k=>materias.filter(m=>nk(m.cod)===k||nk(m.nrc)===k);
+  let c=[];
+  if(cod)c=porCod(cod);
+  if(!c.length&&tok)c=porCod(tok);
+  if(!c.length&&nro)c=materias.filter(m=>nk(m.nrc)===nro||nk(m.nro)===nro);
+  if(!c.length&&(nom||tokN))c=materias.filter(m=>nz(m.nombre)===(nom||tokN));
+  const afinar=f=>{const x=c.filter(f);if(x.length)c=x};
+  if(c.length>1&&nro)afinar(m=>nk(m.nrc)===nro||nk(m.nro)===nro);
+  if(c.length>1&&cod)afinar(m=>nk(m.cod)===cod);
+  if(c.length>1&&nom)afinar(m=>nz(m.nombre)===nom);
+  if(!c.length)return{falta:true};
+  if(crnNoExiste)return{m:c[0],fallback:{crn:String(e.crn||'').trim(),materia:c[0].nombre,cod:String(c[0].cod||''),nrc:String(c[0].nrc||'')}};   // el CRN del archivo no está en la oferta: usar la primera sección del código
+  if(c.length>1&&new Set(c.map(m=>nz(m.horario))).size>1)return{amb:true};
+  return{m:c[0]}}
+function resolverInsc(es){
+  const ok=[],fuera=[],amb=[],fb=[],visto=new Set(),vistoFb=new Set();
+  for(const e of es){
+    const lab=e.cod||e.nro||e.nom||e.tok,x=resolverUna(e);
+    if(x.m){
+      if(!visto.has(x.m.nrc)){visto.add(x.m.nrc);ok.push(x.m.nrc)}
+      if(x.fallback){const k=normCode(x.fallback.crn)+'|'+normCode(x.m.nrc);if(!vistoFb.has(k)){vistoFb.add(k);fb.push(x.fallback)}}
+    }
+    else if(x.amb){if(!amb.includes(lab))amb.push(lab)}
+    else if(!fuera.includes(lab))fuera.push(lab)}
+  return{ok,fuera,amb,fb}}
+function resumenInsc(){
+  if(!insc)return;
+  if(!datos){aviso('Archivo «'+insc.nombre+'» leído: '+insc.porCi.size+' cédula(s). Carga el data.json de reportes para vincularlas.');return}
+  const s=inscStats,extra=[...insc.porCi.keys()].filter(k=>!s.keys.has(k)).length;
+  const fbTotal=alumnos.reduce((n,a)=>n+(((st[a.ci]||{}).fb||[]).length),0);
+  let m='Inscripciones: '+s.vinc+' de '+alumnos.length+' alumno(s) vinculados · '+s.mats+' materia(s) en horario';
+  if(s.sinIns)m+=' · '+s.sinIns+' sin inscripción en el archivo';
+  if(extra)m+=' · '+extra+' cédula(s) del archivo sin reporte (ignoradas)';
+  if(s.ed)m+=' · '+s.ed+' con horario editado (se conserva)';
+  if(fbTotal)m+=' · ⚠ '+fbTotal+' CRN sin oferta: se asignó la sección disponible (revisa el detalle del alumno)';
+  if(s.noRes)m+=' · ⚠ '+s.noRes+' materia(s) sin resolver (revisa las alertas del alumno)';
+  if(!materias.length)m='⚠ No hay oferta de materias cargada: no se puede armar el horario. '+m;
+  aviso(m,!!s.noRes||!!fbTotal||!materias.length)}
+/* Al subir un nuevo Detalle de Inscripción, ninguna cédula debe conservar el horario editado:
+   así aplicar() vuelve a vincular desde el archivo recién cargado. */
+const olvidarEdiciones=()=>{for(const k of Object.keys(st)){if(k==='sig'||k==='probs')continue;const s=st[k];if(s&&typeof s==='object'&&!Array.isArray(s))s.ed=false}};
+$('fIns').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let d=null;try{d=/\.xlsx$/i.test(f.name)?await f.arrayBuffer():await leerTexto(f)}catch(x){}
+  try{const p=await parsearInsc(f.name,d);insc=Object.assign({nombre:f.name},p);olvidarEdiciones();aplicar();resumenInsc()}
+  catch(x){aviso('No se pudo leer «'+f.name+'»: '+x.message,true)}};
+
+
+$('btnResetSt').onclick=()=>{
+  if(confirm('¿Restablecer los datos locales? Se perderán los cambios de horario, las notas, los «listo» y los checks de problemas (usa «Respaldo» antes si quieres conservarlos).')){
+    try{localStorage.removeItem('hr_estado')}catch(e){}
+    st = {};limpiarUndo();
+    aplicar();
+    aviso('Memoria local restablecida.');
+  }
+};
+
+function aplicar(){
+  if(datos&&datos._sig)st.sig=datos._sig;
+  materias=matsArchivo||(datos?normM(datos.materias):[]);
+  if((!materias||!materias.length)&&malla){
+    materias=malla.entries.map(e=>({nrc:e.rawCode||e.code,cod:e.rawCode||e.code,nro:e.nro,nombre:e.rawName||e.name,horario:e.hor,profesor:'',det:[e.nro&&'Curso '+e.nro].filter(Boolean).join(' · '),sl:slots(e.hor)}));
+  }
+  idx1=new Map();idx2=new Map();rcache=new Map();acache=new Map();
+  materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
+  materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
+  const vistos=new Set();let sinCi=0,dupCi=0;
+  inscStats={vinc:0,mats:0,sinIns:0,noRes:0,ed:0,fb:0,fbList:[],keys:new Set()};
+  alumnos=datos?(datos.estudiantes||[]).map(a=>{
+    const ci=String(a.ci==null?'':a.ci).trim();
+    if(!ci||ci==='undefined'||ci==='null'){sinCi++;return null}
+    if(vistos.has(ci)){dupCi++;return null}vistos.add(ci);
+    const pv=st[ci]||{},ins=insc&&insc.porCi.get(ciKey(ci));
+    let r,amb=[],fb=pv.fb||[];                                      // todo a NRC canónico; los que no existen en la oferta van aparte
+    if(pv.ed){r=canonN((pv.n||[]).concat(pv.fuera||[]));amb=pv.amb||[];if(ins)inscStats.ed++}   // el horario editado a mano manda sobre el archivo
+    else if(ins){const x=resolverInsc(ins);r={ok:x.ok,fuera:x.fuera};amb=x.amb;fb=x.fb;inscStats.vinc++;inscStats.mats+=x.ok.length;inscStats.noRes+=x.fuera.length+x.amb.length;inscStats.fb+=fb.length;if(fb.length)inscStats.fbList.push(...fb.map(f=>Object.assign({},f,{ci,nombre:a.nombre})))}
+    else{r=canonN(a.materias_inscriptas||[]);if(insc)inscStats.sinIns++}
+    if(insc)inscStats.keys.add(ciKey(ci));
+    st[ci]={n:r.ok,fuera:r.fuera,amb,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||'',fb};
+    return Object.assign({},a,{ci,nombre:(insc&&insc.nombresCi&&insc.nombresCi.get(ciKey(ci)))||a.nombre});
+  }).filter(Boolean):[];
+  reportes=datos?(datos.reportes||[]):[];
+  repBy=new Map();reportes.forEach(r=>{const k=String(r.ci);if(!repBy.has(k))repBy.set(k,[]);repBy.get(k).push(r)});
+  if(sinCi||dupCi)aviso('Se omitieron alumnos: '+sinCi+' sin cédula y '+dupCi+' con cédula repetida.',true);
+  if(sel&&!alumnos.some(a=>a.ci===sel))sel=null;
+  $('estado').textContent=materias.length+' materias · '+alumnos.length+' alumnos · '+reportes.length+' reportes'+(insc?' · inscripción: '+inscStats.vinc+'/'+alumnos.length+' vinculados':'');
+  {const R=[['correquisitos',materias.some(m=>(m.coreq||[]).length)],
+     ['créditos',materias.some(m=>m.cred)&&alumnos.some(a=>a.max_creditos||a.max_uc)],['cupo',materias.some(m=>m.cupo)]];
+   let s=$('reglas');if(!s){s=document.createElement('span');s.id='reglas';s.className='mut';$('estado').after(s)}}
+  mostrarProf();
+  guardar();
+  renderTodo();
+  if(datos&&!hayRep())aviso('Este data.json no trae reportes por alumno (versión antigua del programa).',true);
+}
+
+/* ---------- acciones ---------- */
+const ajustes=Object.assign({undo:true},(()=>{try{return JSON.parse(localStorage.getItem('hr_ajustes')||'{}')}catch(e){return{}}})());
+const undoSt=[],redoSt=[];
+function snap(){undoSt.push({k:sel||'_libre',n:[...get().n]});if(undoSt.length>50)undoSt.shift();redoSt.length=0}
+function viajar(de,a,vacio){const u=de.pop();if(!u)return aviso(vacio,true);
+  const c=st[u.k]=st[u.k]||{n:[],nota:'',listo:false};a.push({k:u.k,n:[...c.n]});
+  c.n=u.n;c.ed=true;c.listo=false;if(profesor)c.prof=profesor;sel=u.k==='_libre'?null:u.k;guardar();renderTodo()}
+const deshacer=()=>viajar(undoSt,redoSt,'Nada que deshacer.');
+const rehacer=()=>viajar(redoSt,undoSt,'Nada que rehacer.');
+function validar(m,cur,ex){
+  ex=ex||[];
+  if(!m.sl.length)return 'No se reconoce el horario de «'+m.nombre+'».';
+{const a0=alumnos.find(x=>x.ci===sel),aa0=a0&&(a0.materias_aprobadas||a0.aprobadas);if(Array.isArray(aa0)&&m.cod&&aa0.map(nc).includes(nc(m.cod)))return 'Ya aprobaste «'+m.nombre+'».'}
+  const dup=cur.n.map(byNrc).find(o=>o&&o!==m&&normCode(o.nrc)!==normCode(m.nrc)&&(normCode(o.cod)===normCode(m.cod)||nz(o.nombre)===nz(m.nombre)));
+  if(dup)return '«'+m.nombre+'» ya está inscrita en otra sección ('+dup.nrc+').';
+  const c=conflictosCon(m).concat(ex.filter(o=>choca(o.sl,m.sl)));if(c.length)return '«'+m.nombre+'» choca con '+c.map(x=>x.nombre).join(', ')+'.';
+  const a=alumnos.find(x=>x.ci===sel);
+  if(a){
+    const mx=+(a.max_creditos||a.max_uc||0);
+    if(mx&&m.cred){const t=cur.n.map(byNrc).concat(ex).filter(Boolean).reduce((z,o)=>z+(o.cred||0),0);if(t+m.cred>mx)return 'Supera el máximo de créditos ('+(t+m.cred)+'/'+mx+').'}
+  }
+  if(m.cupo){const n=alumnos.filter(x=>x.ci!==sel&&st[x.ci]&&(st[x.ci].n||[]).some(q=>normCode(q)===normCode(m.nrc))).length;if(n>=m.cupo)return 'Sin cupo ('+n+'/'+m.cupo+').'}
+  return ''}
+/* ---------- correquisitos (mismo Nro_Curso = mutuas; otro Nro_Curso = aprobada o en el mismo semestre) ---------- */
+const aprobadasDe=ci=>{const a=alumnos.find(x=>x.ci===ci);return new Set(((a&&(a.materias_aprobadas||a.aprobadas))||[]).map(nc))};
+function reqs(m){
+  if(rcache.has(m))return rcache.get(m);
+  const j=[],p=[],mine=(m.coreq||[]).map(String),mn=String(m.nro);
+  for(const o of materias){
+    if(o===m)continue;const on=String(o.nro);
+    if(on===mn&&(mine.includes(on)||(o.coreq||[]).map(String).includes(on)))j.push(o);
+    else if(on!==mn&&mine.includes(on))p.push(o);
+  }
+  const r={j,p};rcache.set(m,r);return r}
+const okReq=(m,S,A)=>{const r=reqs(m);return r.j.every(o=>S.has(normCode(o.nrc)))&&r.p.every(o=>S.has(normCode(o.nrc))||A.has(nc(o.cod)))};
+function planAgregar(m){
+  const A=aprobadasDe(sel),S=new Set(get().n.map(normCode)),add=[],cola=[m];
+  while(cola.length){
+    const x=cola.shift();if(S.has(normCode(x.nrc)))continue;S.add(normCode(x.nrc));add.push(x);
+    const r=reqs(x);r.j.forEach(o=>cola.push(o));r.p.filter(o=>!A.has(nc(o.cod))).forEach(o=>cola.push(o));
+  }
+  return add}
+function quitar(m){
+  const cur=get(),A=aprobadasDe(sel),q=[m],fuera=[],tc=normCode(m.nrc);
+  cur.n=cur.n.filter(x=>normCode(x)!==tc);
+  while(q.length){
+    const r=q.shift();
+    for(const id of [...cur.n]){
+      const x=byNrc(id);if(!x)continue;const rq=reqs(x);
+      if(rq.j.concat(rq.p).includes(r)&&!okReq(x,new Set(cur.n.map(normCode)),A)){cur.n=cur.n.filter(y=>y!==id);fuera.push(x.nombre);q.push(x)}
+    }
+  }
+  if(fuera.length)aviso('También se quitó: '+fuera.join(', ')+' (no se puede ver sin «'+m.nombre+'»).')}
+const faltantesDe=ci=>{const c=(st[ci]&&st[ci].n)||[],S=new Set(c.map(normCode)),A=aprobadasDe(ci);return c.map(byNrc).filter(x=>x&&!okReq(x,S,A)).map(x=>x.nombre)};
+function toggle(nrc){
+  const m=byNrc(nrc),cur=get();if(!m)return;
+  const tc=normCode(m.nrc);
+  if(cur.n.some(x=>normCode(x)===tc)){
+    if(ajustes.conf&&!confirm('¿Quitar «'+m.nombre+'» del horario?'))return;
+    snap();quitar(m);
+  }else{
+    const add=planAgregar(m);
+    for(let i=0;i<add.length;i++){
+      const x=add[i],err=validar(x,cur,add.slice(0,i));
+      if(err)return aviso(x===m?err:'Para agregar «'+m.nombre+'» hace falta «'+x.nombre+'», pero '+err.charAt(0).toLowerCase()+err.slice(1),true);
+    }
+    snap();cur.n.push(...add.map(x=>x.nrc));
+    if(add.length>1)aviso('Se agregó también: '+add.slice(1).map(x=>x.nombre).join(', ')+'.');
+  }
+  cur.ed=true;if(profesor)cur.prof=profesor;if(cur.listo){cur.listo=false;aviso('Cambió el horario: se quitó la marca «listo».',true)}
+  guardar();renderMaterias();renderHorario();renderAlumnos();renderBottom();
+}
+$('mats').onclick=e=>{const d=e.target.closest('.mat');if(d)toggle(d.dataset.nrc)};
+$('hor').onclick=e=>{const d=e.target.closest('.blk');if(d)toggle(d.dataset.q)};
+$('als').onchange = e => {
+  const chk = e.target.closest('.chk-prob');
+  if (!chk) return;
+  st.probs = st.probs || {};
+  st.probs[chk.dataset.key] = chk.checked;
+  guardar();
+  renderAlumnos();
+};
+$('als').onclick = e => {
+  if (e.target.closest('.rep')) return;      // dentro del reporte actúa el checkbox/label; no se re-renderiza antes
+  const d = e.target.closest('.al');
+  if (!d) return;
+  const ci = d.dataset.ci;
+  if (e.target.closest('.arr')) abiertos.has(ci) ? abiertos.delete(ci) : abiertos.add(ci);
+  sel = ci;
+  renderTodo();
+};
+$('nota').oninput=()=>{const c=get();c.nota=$('nota').value;if(profesor)c.prof=profesor;if(c.listo&&!c.nota.trim()){c.listo=false;renderAlumnos();$('btnListo').textContent='Marcar alumno como listo'}guardar();renderPrev()};
+$('btnListo').onclick=()=>{
+  const c=get();
+  if(!c.listo&&!c.nota.trim())return aviso('Escribe la resolución antes de marcar al alumno como listo.',true);
+  if(!c.listo){const a0=alumnos.find(x=>x.ci===sel),al=a0?alertas(a0):[];if(al.length)return aviso('No se puede marcar listo: '+al.slice(0,3).join(' · ')+(al.length>3?' (+'+(al.length-3)+' más)':'')+'.',true)}
+  if(!c.listo){const a=alumnos.find(x=>x.ci===sel);if(a&&pendientesReal(a)>0&&!confirm('Quedan '+pendientesReal(a)+' problema(s) sin marcar como resueltos. ¿Marcar como listo de todos modos?'))return}c.listo=!c.listo;if(profesor)c.prof=profesor;guardar();;renderAlumnos();renderBottom();
+};
+const listos=()=>alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).map(a=>({ci:a.ci,correo:a.correo||a.email||'',prof:st[a.ci].prof||profesor||'',nota:st[a.ci].nota,nrcs:(st[a.ci].n||[]).join(' '),mats:(st[a.ci].n||[]).map(n=>{const m=byNrc(n);return m?m.nombre+' ('+m.horario+')':n}).join(' | ')}));
+$('btnExp').onclick=()=>{
+  const L=listos();if(!L.length)return aviso('Marca al menos un alumno como listo.',true);
+  const q=s=>'"'+String(s).replace(/"/g,'""').replace(/\s*\n\s*/g,' ').replace(/^([=+\-@])/,"'$1")+'"';
+  const csv='\uFEFFsep=;\r\nCI;correo;resolucion;profesor\r\n'+L.map(x=>q(x.ci)+';'+q(x.correo)+';'+q(x.nota)+';'+q(x.prof)).join('\r\n');
+  const u=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');
+  a.href=u;a.download='resoluciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+  aviso('Exportado: '+L.length+' fila(s) → resoluciones.csv (ábrelo con Excel).');
+};
+
+/* ---------- render ---------- */
+function renderMaterias(){
+  const cur=get(),A=aprobadasDe(sel),repsSel=reportes.filter(r=>sel&&String(r.ci)===sel);
+  const isInc=m=>cur.n.some(e=>normCode(e)===normCode(m.nrc));
+  const getRepStatus=m=>{
+    if(!sel)return{isRep:false,allow:true};
+    const rs=repsSel.filter(r=>repEsDe(r,m));
+    if(!rs.length)return{isRep:false,allow:true};
+    return{isRep:true,allow:rs.some(permiteInscribir)}};
+  const qq=nz($('qMat').value);
+  const vis=materias.filter(m=>(isInc(m)||getRepStatus(m).allow)&&(!qq||nz(m.nombre+' '+m.cod+' '+m.nrc+' '+m.horario).includes(qq)));
+  const ctx=materias.filter(m=>isInc(m)||getRepStatus(m).isRep);          // las que "piden" requisitos: en horario o reportadas
+  const necesita=(x,m)=>{const r=reqs(x);return r.j.includes(m)||(r.p.includes(m)&&!A.has(nc(m.cod)))};
+  const SEC=[['horario','En horario'],['reporte','Reporte'],['correq','Correquisito'],['choque','Choque de horario'],['sobra','Materias sobrantes']];
+  const G={},H=new Map();SEC.forEach(s=>G[s[0]]=[]);
+  for(const m of vis){
+    const on=isInc(m),apr=!!m.cod&&A.has(nc(m.cod)),rp=getRepStatus(m).isRep;
+    let cls='mat',tag='',k='sobra';
+    if(on){k='horario';cls+=' on';tag='<em class="t ok">En horario ✓</em>'}
+    else{
+      const c=m.sl.length?conflictosCon(m):[];
+      const nec=ctx.filter(x=>x!==m&&necesita(x,m));
+      if(!m.sl.length){cls+=' off';tag='<em class="t">Horario no reconocido</em>'}
+      else if(c.length){cls+=' off';tag='<em class="t bad">Choca con '+esc(c.map(x=>x.nombre).join(', '))+'</em>'}
+      if(nec.length)tag+='<em class="t">Correquisito de '+esc(nec.map(x=>x.nombre).join(', '))+'</em>';
+      k=rp?'reporte':nec.length?'correq':c.length?'choque':'sobra';
+    }
+    if(rp)tag+='<em class="t warn">⚠ reportada</em>';
+    if(apr)tag+='<em class="t ok">Aprobada ✓</em>';
+    G[k].push(m);
+    H.set(m,'<div class="'+cls+'" data-nrc="'+esc(m.nrc)+'" role="button" tabindex="0" aria-pressed="'+(on?'true':'false')+'"><b>'+esc(m.nombre)+'</b><span class="n">'+esc(m.cod||m.nrc)+'</span><small>'+esc(m.horario)+'</small>'+(m.det?'<small>'+esc(m.det)+'</small>':'')+tag+'</div>');
+  }
+  const ord=(a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''))||String(a.nrc).localeCompare(String(b.nrc));
+  $('mats').innerHTML=vis.length?SEC.filter(s=>G[s[0]].length).map(s=>{
+    const L=G[s[0]].sort(ord),gc=new Map();L.forEach(m=>gc.set(m.nombre,(gc.get(m.nombre)||0)+1));let pv=null;
+    return '<div class="sec">'+s[1]+' <span>'+L.length+'</span></div>'+L.map(m=>{
+      const gh=(m.nombre!==pv&&gc.get(m.nombre)>1)?'<div class="mut" style="margin:6px 2px 2px;font-size:11px">'+esc(m.nombre)+' · '+gc.get(m.nombre)+' secciones</div>':'';
+      pv=m.nombre;return gh+H.get(m)}).join('')
+  }).join(''):'<p class="mut">No hay materias disponibles para este alumno.</p>';
+}
+let fPerfil = '', fOcultar = false;
+const perfilDe = a => a.perfil || 'Alumno';
+const repsDe = a => repBy.get(a.ci) || [];
+function alertas(a){const c=(st[a.ci]&&st[a.ci].n)||[],fu=(st[a.ci]&&st[a.ci].fuera)||[],am=(st[a.ci]&&st[a.ci].amb)||[],ck=c.join('|')+'#'+fu.join('|')+'#'+am.join('|'),h=acache.get(a.ci);if(h&&h.k===ck)return h.v;
+  const out=[],ms=[];fu.forEach(n=>out.push('NRC '+n+' no está en la oferta cargada (no cuenta en el horario)'));am.forEach(n=>out.push('«'+n+'» tiene varias secciones con distinto horario: el archivo de inscripción debe traer el NRC (no cuenta en el horario)'));
+  for(const n of c){const m=byNrc(n);if(!m){out.push('NRC '+n+' no está en la oferta cargada');continue}if(!m.sl.length)out.push('Horario no reconocido: '+m.nombre);ms.push(m)}
+  for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++){
+    if(ms[i].sl.length&&ms[j].sl.length&&choca(ms[i].sl,ms[j].sl))out.push('Choque: '+ms[i].nombre+' / '+ms[j].nombre);
+    if(nz(ms[i].nombre)===nz(ms[j].nombre))out.push('Materia duplicada: '+ms[i].nombre)}
+  const S=new Set(c.map(normCode)),A=aprobadasDe(a.ci);ms.filter(x=>!okReq(x,S,A)).forEach(x=>out.push('Falta correquisito de «'+x.nombre+'»'));
+  acache.set(a.ci,{k:ck,v:out});return out}
+const totalProbs = a => repsDe(a).length;
+const pendientesReal = a => repsDe(a)
+  .filter((r, i) => !(st.probs || {})[a.ci + '_' + r.nrc + '_' + i]).length;
+// Prioridad = total de problemas reportados; pasa a 0 solo cuando el alumno está marcado «listo» (no mira los checks).
+const pendientesOrden = a => (st[a.ci] && st[a.ci].listo) ? 0 : totalProbs(a);
+$('fPerfil').onchange = e => { fPerfil = e.target.value; renderAlumnos(); };
+$('fOcultar').onchange = e => { fOcultar = e.target.checked; renderAlumnos(); };
+
+function renderAlumnos(){
+  st.probs = st.probs || {};
+  const tipos = ['Alumno', 'Beca trabajo', 'Deportista', 'Ayudante especial'];
+  alumnos.forEach(a => { if (!tipos.includes(perfilDe(a))) tipos.push(perfilDe(a)); });
+  $('fPerfil').innerHTML = '<option value="">Todos los tipos (' + alumnos.length + ')</option>' +
+    tipos.map(t => '<option value="' + esc(t) + '"' + (t === fPerfil ? ' selected' : '') + '>' + esc(t) +
+      ' (' + alumnos.filter(a => perfilDe(a) === t).length + ')</option>').join('');
+
+  const lista = alumnos.filter(a => (!fPerfil || perfilDe(a) === fPerfil) && !(fOcultar && st[a.ci] && st[a.ci].listo));
+  const nom = a => String(a.nombre || '');
+  lista.sort((a, b) => pendientesOrden(b) - pendientesOrden(a) || nom(a).localeCompare(nom(b)));
+  $('fCnt').textContent = alumnos.length
+  ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientesReal(a), 0) + ' problema(s) pendiente(s)'
+  : '';
+  $('als').innerHTML = lista.length ? lista.map(a => {
+    const rs = repsDe(a), op = abiertos.has(a.ci), s = st[a.ci]; const al = alertas(a), fb = (s && s.fb) || [];
+    let det = '';
+    if (op) {
+      const fbHtml = fb.length ? '<ul style="padding-left:0">' + fb.map(x => '<li style="list-style:none;color:var(--wn);margin-bottom:5px">ℹ El CRN ' + esc(x.crn) + ' de «' + esc(x.materia) + '» no está en la oferta; se asignó la sección ' + esc(x.nrc) + ' (con oferta).</li>').join('') + '</ul>' : '';
+      det = '<div class="rep">' + fbHtml + (al.length ? '<ul>' + al.map(x => '<li class="err">⚠ ' + esc(x) + '</li>').join('') + '</ul>' : '') + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
+        const key = a.ci + '_' + r.nrc + '_' + i;
+        const ok = !!st.probs[key];
+        return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
+               '<input type="checkbox" class="chk-prob" data-key="' + esc(key) + '" ' + (ok ? 'checked' : '') + '> ' +
+               '<div><b style="' + (ok ? 'text-decoration:line-through;opacity:0.6' : '') + '">' + esc(r.tipo_error) + (r.motivo ? ' · ' + esc(r.motivo) : '') + '</b>' +
+               (ok ? ' <span style="color:var(--ok);font-size:11px;font-weight:bold">✓ Resuelto</span>' : '') +
+               '<br><small>' + esc(nomRep(r)) + (r.horario ? ' · ' + esc(r.horario) : '') + '</small></div>' +
+               '</label></li>';
+      }).join('') + '</ul>'
+      : '<small>' + (hayRep() ? 'Este alumno no tiene reportes.' : 'Este data.json no trae reportes por alumno.') + '</small>') + '</div>';
+    }
+    
+    const resueltos = rs.filter((r, i) => st.probs[a.ci + '_' + r.nrc + '_' + i]).length;
+    const badgeProbs = rs.length 
+      ? '<span class="bdg ' + (resueltos === rs.length ? 'ok' : '') + '" title="Problemas resueltos">' + resueltos + '/' + rs.length + '</span>'
+      : '<span class="bdg">0</span>';
+
+    return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
+      '<div class="who" role="button" tabindex="0" aria-label="Seleccionar alumno"><b>' + (lista.indexOf(a) + 1) + '. ' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + (insc ? (insc.porCi.has(ciKey(a.ci)) ? ' · ' + (s ? s.n.length : 0) + ' inscritas' : ' · sin inscripción') : '') + '</small></div>' +
+      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + ((s && s.fb && s.fb.length) ? '<span class="bdg" style="background:var(--wns);color:var(--wn)" title="' + esc(s.fb.map(x => 'CRN ' + x.crn + ' de ' + x.materia + ' → sección ' + x.nrc).join(' | ')) + '">ℹ ' + s.fb.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
+  }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
+                                : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
+}
+
+function renderHorario(){
+  const all=materias.flatMap(m=>m.sl);let h0=7,h1=19,nd=6;
+  if(all.length){
+    h0=Math.min(7, Math.floor(Math.min(...all.map(x=>x.s))));
+    h1=Math.max(19, Math.ceil(Math.max(...all.map(x=>x.e))));
+    if(all.some(x=>x.d===6))nd=7;
+  }
+  const cont = $('hor');
+  const availH = (cont ? cont.clientHeight : 500) - 32;
+  const hoursCount = h1 - h0;
+  const H = Math.max(40, Math.floor(availH / hoursCount));
+  const alto = hoursCount * H, cur = get();
+
+  let h='<div class="grid" style="grid-template-columns:46px repeat('+nd+',1fr)"><div class="dh"></div>'+DN.slice(0,nd).map(d=>'<div class="dh">'+d+'</div>').join('');
+  h+='<div class="hrs" style="height:'+alto+'px">'+Array.from({length:hoursCount},(_,i)=>'<div style="height:'+H+'px;line-height:'+H+'px">'+pad(h0+i)+':00</div>').join('')+'</div>';
+  
+  for(let d=0;d<nd;d++){
+    h+='<div class="col" style="height:'+alto+'px;background-size:100% '+H+'px">';
+    
+    // 1. Recopilar todos los bloques del día
+    const dayBlocks = [];
+    for(const n of cur.n){
+      const m = byNrc(n);
+      if(!m) continue;
+      m.sl.filter(x => x.d === d).forEach(x => {
+        dayBlocks.push({ nrc: n, m, s: x.s, e: x.e });
+      });
+    }
+
+    // 2. Agrupar y calcular distribución para evitar solapamientos visuales
+    dayBlocks.sort((a,b) => a.s - b.s || (b.e - b.s) - (a.e - a.s));
+    const clusters = [];
+    for(const blk of dayBlocks){
+      let placed = false;
+      for(const cluster of clusters){
+        if(cluster.some(item => blk.s < item.e && item.s < blk.e)){
+          cluster.push(blk);
+          placed = true;
+          break;
+        }
+      }
+      if(!placed) clusters.push([blk]);
+    }
+
+    for(const cluster of clusters){
+      const subCols = [];
+      for(const blk of cluster){
+        let assigned = false;
+        for(let i=0; i<subCols.length; i++){
+          if(!subCols[i].some(item => blk.s < item.e && item.s < blk.e)){
+            subCols[i].push(blk);
+            blk.subCol = i;
+            assigned = true;
+            break;
+          }
+        }
+        if(!assigned){
+          subCols.push([blk]);
+          blk.subCol = subCols.length - 1;
+        }
+      }
+      const total = subCols.length;
+      for(const blk of cluster) blk.totalCols = total;
+    }
+
+    // 3. Renderizar bloques dividiendo el ancho si hay choque
+    for(const blk of dayBlocks){
+      const colIdx = Math.abs(String(blk.nrc).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 6;
+      const total = blk.totalCols || 1;
+      const sub = blk.subCol || 0;
+      const wPct = 100 / total;
+      const leftCss = `calc(${sub * wPct}% + 2px)`;
+      const widthCss = `calc(${wPct}% - 3px)`;
+
+      h += '<div class="blk c' + colIdx + '" data-q="' + esc(blk.nrc) + '" role="button" tabindex="0" aria-label="Quitar ' + esc(blk.m.nombre) + ' del horario" title="' + esc(blk.m.nombre) + ' (Clic para quitar)" style="top:' + ((blk.s - h0) * H) + 'px;height:' + ((blk.e - blk.s) * H) + 'px;left:' + leftCss + ';width:' + widthCss + '">' +
+      '<b>' + esc(blk.m.nombre) + '</b>' +
+      '<span>' + fmt(blk.s) + '–' + fmt(blk.e) + '</span>' +
+      '<span>NRC: ' + esc(blk.nrc) + '</span>' +
+      '</div>';
+    }
+
+    h+='</div>';
+  }
+  $('hor').innerHTML=h+'</div>';
+}
+function renderPrev(){
+  const L=listos();
+  $('prev').innerHTML=L.length?'<table><tr><th>CI</th><th>Correo</th><th>Resolución</th><th>Profesor</th></tr>'+L.map(x=>'<tr><td>'+esc(x.ci)+'</td><td>'+esc(x.correo)+'</td><td>'+esc(x.nota)+'</td><td>'+esc(x.prof)+'</td></tr>').join('')+'</table>':'<p class="mut">Aún no hay alumnos marcados como listos.</p>';
+}
+function renderBottom(){
+  const a=alumnos.find(x=>x.ci===sel),c=get();
+  $('quien').textContent=a?a.nombre+' · C.I. '+a.ci:'Selecciona un alumno';
+  $('nota').disabled=!a;$('nota').value=a?c.nota:'';
+  $('btnListo').disabled=!a;$('btnListo').textContent=a&&c.listo?'Quitar “listo”':'Marcar alumno como listo';
+  renderPrev();
+}
+function renderTodo(){renderMaterias();renderAlumnos();renderHorario();renderBottom()}
+renderTodo();
+
+/* ---------- puente: materias filtradas -> gestor ---------- */
+const campo=(r,L)=>{const k=Object.keys(r||{}).find(k=>L.includes(nz(k)));return k?String(r[k]).replace(',','.'):''};
+function materiasFiltradas(){
+  const usados=new Set(),ids=new Set(),out=[];let libre=900001;
+  const fus=new Map(),lista=[];
+  for(const x of aceptadas){const it=x.it,nro=String(it.nro||'').trim(),k=nro?normCode(nro)+'|'+normCode(it.rawCode):null,h=String(it.hor||'').trim();
+    if(k&&fus.has(k)){const g=fus.get(k);if(h&&!g.hs.includes(h))g.hs.push(h);continue}
+    const g={x,hs:h?[h]:[]};if(k)fus.set(k,g);lista.push(g)}
+  for(const g of lista){
+    const x=g.x,it=x.it,
+          cod=String(it.rawCode||'').trim(),
+          nro=String(it.nro||'').trim(),
+          hor=g.hs.join('; '),
+          base=nro||cod, // <-- CAMBIO AQUÍ: Prioriza el número de sección/NRC
+          id=base||(libre++);
+    const dk=normCode(cod)+'|'+normCode(id)+'|'+nz(hor);if(usados.has(dk))continue;usados.add(dk);
+    let id2=String(id),c2=1;while(ids.has(id2))id2=id+'X'+(++c2);ids.add(id2);
+    out.push({
+      nrc:id2,
+      cod:cod||nro,
+      nro:nro,
+      nombre:it.rawName||cod,
+      horario:hor,
+      profesor:'',
+      det:[nro&&'Sección/NRC '+nro,it.cor&&'Correquisitos: '+it.cor].filter(Boolean).join(' · '),
+      coreq:tok(it.cor),cred:+campo(it.row,['CREDITOS','UC','UNIDADES CREDITO','UNIDADES DE CREDITO'])||0,cupo:+campo(it.row,['CUPO','CUPOS'])||0,
+      sl:slots(hor)
+    });
+  }
+  return out;
+}
+function fase(n){
+  $('fase1').hidden=n!==1;$('fase2').hidden=n!==2;$('volver').hidden=n!==2;
+  $('p1').className='step'+(n===1?' on':'');$('p2').className='step'+(n===2?' on':'');
+  if(n===2)aplicar();
+}
+let profesor='';try{profesor=localStorage.getItem('hr_prof')||''}catch(e){}
+if(!$('profNombre')){const c=document.createElement('section');c.className='card';c.innerHTML='<h2>Profesor</h2><label>Tu nombre y apellido (obligatorio) <input id="profNombre" placeholder="Ej.: María Pérez" autocomplete="name"></label>';document.querySelector('.f1main').prepend(c)}
+$('profNombre').value=profesor;
+$('profNombre').oninput=e=>{profesor=e.target.value.trim();try{localStorage.setItem('hr_prof',profesor)}catch(x){}mostrarProf()};
+function mostrarProf(){let s=$('profTag');if(!s){s=document.createElement('span');s.id='profTag';s.className='mut';$('estado').after(s)}s.textContent=' · Profesor: '+(profesor||'(sin nombre)')}
+const hayProf=()=>{if(profesor)return true;aviso('Escribe tu nombre de profesor para continuar.',true);$('profNombre').focus();return false};
+$('bGo').onclick=()=>{if(!hayProf())return;matsArchivo=materiasFiltradas();fase(2)};
+$('bSkip').onclick=()=>{if(!hayProf())return;matsArchivo=null;fase(2)};
+$('volver').onclick=()=>fase(1);
+renderFiltro();fase(1);
+$('btnMinBot').onclick=()=>{
+  const b=$('botPanel');
+  const min=b.classList.toggle('min');
+  $('btnMinBot').textContent=min?'▲ Mostrar panel':'─ Minimizar';
+};
+// También recalcula el horario si la ventana cambia de tamaño
+if(window.ResizeObserver){let rw=0,rh=0,raf=0;                                           // recalcula el horario solo si el panel cambia de tamaño
+  new ResizeObserver(es=>{const r=es[0].contentRect;if(Math.abs(r.width-rw)<2&&Math.abs(r.height-rh)<2)return;rw=r.width;rh=r.height;cancelAnimationFrame(raf);raf=requestAnimationFrame(renderHorario)}).observe($('hor'))}
+else addEventListener('resize',renderHorario);
+$('qMat').oninput=renderMaterias;
+function aplicarAj(){$('btnUndo').hidden=!ajustes.undo;document.body.classList.toggle('big',!!ajustes.big);$('btnRedo').hidden=!ajustes.undo;}
+[['aConf','conf'],['aUndo','undo'],['aBig','big']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
+aplicarAj();
+$('btnUndo').onclick=deshacer;
+$('btnRedo').onclick=rehacer;
+document.addEventListener('keydown',e=>{if(ajustes.undo&&(e.ctrlKey||e.metaKey)&&!/TEXTAREA|INPUT/.test(e.target.tagName)){const k=e.key.toLowerCase();if(k==='z'&&!e.shiftKey){e.preventDefault();deshacer()}else if(k==='y'||(k==='z'&&e.shiftKey)){e.preventDefault();rehacer()}}}); 
+$('btnPrint').onclick=()=>window.print();
+$('btnResp').onclick=()=>descargar(new Blob([JSON.stringify(st)],{type:'application/json'}),'respaldo_horarios.json');
+$('btnRest').onclick=()=>$('fResp').click();
+$('fResp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);if(!o||typeof o!=='object')throw 0;if(o.sig&&datos&&datos._sig&&o.sig!==datos._sig&&!confirm('Este respaldo se hizo con otro data.json. ¿Restaurarlo de todos modos?'))return aviso('Restauración cancelada.');if(hayEstado()){if(!confirm('Restaurar reemplaza el estado actual (se descargará un respaldo automático). ¿Continuar?'))return aviso('Restauración cancelada.');respaldoAuto()}st=o;limpiarUndo();guardar();aplicar();aviso('Respaldo restaurado.')}catch(x){aviso('Respaldo inválido.',true)}});e.target.value=''};
+
+/* ---------- accesibilidad ---------- */
+$('aviso').setAttribute('role','status');$('aviso').setAttribute('aria-live','polite');
+$('qMat').setAttribute('aria-label','Buscar materia por nombre, código o día');
+document.addEventListener('keydown',e=>{      // Enter / Espacio activan materias, bloques y alumnos; el foco vuelve a la materia tras re-dibujar
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('.mat,.blk,.who')){
+    e.preventDefault();const k=e.target.dataset.nrc;e.target.click();
+    if(k){const n=[...document.querySelectorAll('#mats .mat')].find(x=>x.dataset.nrc===k);if(n)n.focus()}
+  }});
+{const s=document.createElement('style');           // impresión: nombre y cédula del alumno + colores
+ s.textContent='#printHdr{display:none}@media print{#printHdr{display:block!important;font:600 15px/1.4 system-ui;letter-spacing:-.01em;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #c8c8c8}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+ document.head.appendChild(s);
+ const h=document.createElement('div');h.id='printHdr';document.body.prepend(h);
+ addEventListener('beforeprint',()=>{const a=alumnos.find(x=>x.ci===sel);h.textContent=a?'Horario de '+a.nombre+' · C.I. '+a.ci:'Horario'})}
+/* ---------- gráficas de torta (3 menús) ---------- */
+{
+  const COL=['#3b6ef5','#12a37f','#f59e0b','#e5484d','#8e4ec6','#0ea5b7','#d6409f','#6b7280'];
+  const MENUS=[['listos','1 · Alumnos listos y pendientes'],['tipos','2 · Problemas recurrentes'],['mats','3 · Materias afectadas']];
+  let actual='listos';
+  const mayores=(mapa,n)=>{const a=[...mapa.entries()].sort((x,y)=>y[1]-x[1]),r=a.slice(0,n),o=a.slice(n).reduce((s,x)=>s+x[1],0);if(o)r.push(['Otros',o]);return r};
+  const cuenta=(mapa,k)=>mapa.set(k,(mapa.get(k)||0)+1);
+  const reportesDe=solo=>{const out=[];alumnos.forEach(a=>repsDe(a).forEach((r,i)=>{if(!(solo&&(st.probs||{})[a.ci+'_'+r.nrc+'_'+i]))out.push(r)}));return out};
+  const FUENTES={
+    listos:()=>{const l=alumnos.filter(a=>st[a.ci]&&st[a.ci].listo).length;return{rows:[['Listos',l],['Pendientes',alumnos.length-l]],unidad:'alumnos'}},
+    tipos:solo=>{const m=new Map(),et=new Map();reportesDe(solo).forEach(r=>{const t=String(r.tipo_error||'Sin tipo').trim(),k=norm(t);if(!et.has(k))et.set(k,t);cuenta(m,k)});
+      return{rows:mayores(m,7).map(([k,v])=>[et.get(k)||k,v]),unidad:'reportes'}},
+    mats:solo=>{const m=new Map();reportesDe(solo).forEach(r=>{const x=matDe(r);cuenta(m,x?x.nombre:(r.materia||'NRC '+r.nrc))});return{rows:mayores(m,7),unidad:'reportes'}}
+  };
+  function torta(rows){
+    const R=rows.filter(r=>r[1]>0),tot=R.reduce((s,r)=>s+r[1],0);
+    if(!tot)return '<p class="mut">No hay datos para graficar.</p>';
+    let ang=-Math.PI/2,svg='<svg viewBox="-1.05 -1.05 2.1 2.1" width="240" height="240" role="img" aria-label="Gráfica de torta">',ley='';
+    R.forEach(([n,v],i)=>{
+      const f=v/tot,fin=ang+f*2*Math.PI,c=n==='Otros'?'#9aa3b2':COL[i%COL.length],tip=esc(n)+': '+v+' ('+Math.round(f*100)+'%)';
+      svg+=f>.9999?'<circle r="1" fill="'+c+'"><title>'+tip+'</title></circle>'
+        :'<path d="M0 0L'+Math.cos(ang)+' '+Math.sin(ang)+'A1 1 0 '+(f>.5?1:0)+' 1 '+Math.cos(fin)+' '+Math.sin(fin)+'Z" fill="'+c+'" stroke="var(--pn)" stroke-width=".02"><title>'+tip+'</title></path>';
+      ley+='<li><i style="background:'+c+'"></i><span>'+esc(n)+'</span><b>'+v+'</b><small>'+Math.round(f*100)+'%</small></li>';
+      ang=fin;
+    });
+    return '<div class="gf-fig">'+svg+'</svg><ul class="gf-ley">'+ley+'</ul></div>';
+  }
+  const dlg=document.createElement('dialog');dlg.id='dlgGraf';
+  dlg.innerHTML='<div class="gf-h"><b>Gráficas</b><button type="button" id="gfX" aria-label="Cerrar">✕</button></div>'+
+    '<div class="gf-tabs" role="tablist">'+MENUS.map(([k,t])=>'<button type="button" role="tab" data-g="'+k+'">'+t+'</button>').join('')+'</div>'+
+    '<label class="gf-s" id="gfSoloL"><input type="checkbox" id="gfSolo"> Solo problemas sin resolver</label><div id="gfCuerpo"></div>';
+  document.body.appendChild(dlg);
+  const pintar=()=>{
+    dlg.querySelectorAll('[data-g]').forEach(b=>{const on=b.dataset.g===actual;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+    $('gfSoloL').hidden=actual==='listos';
+    const f=FUENTES[actual]($('gfSolo').checked),tot=f.rows.reduce((s,r)=>s+r[1],0);
+    $('gfCuerpo').innerHTML='<p class="mut" style="margin:6px 0">Total: '+tot+' '+f.unidad+'</p>'+torta(f.rows);
+  };
+  dlg.addEventListener('click',e=>{
+    const b=e.target.closest('[data-g]');if(b){actual=b.dataset.g;pintar()}
+    if(e.target.id==='gfX'||e.target===dlg)dlg.close?dlg.close():dlg.removeAttribute('open');
+  });
+  $('gfSolo').onchange=pintar;
+  const bt=document.createElement('button');bt.id='btnGraf';bt.type='button';bt.className=$('btnPrint').className;bt.textContent='📊 Gráficas';
+  $('btnPrint').after(bt);
+  bt.onclick=()=>{pintar();dlg.showModal?dlg.showModal():dlg.setAttribute('open','')};
+  const s=document.createElement('style');
+  s.textContent='#dlgGraf{border:1px solid var(--bd);border-radius:16px;background:var(--pn);color:var(--tx);padding:0;width:min(600px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--sh-2)}#dlgGraf::backdrop{background:rgba(8,12,20,.55);backdrop-filter:blur(2px)}'+
+    '.gf-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--pn);z-index:1}.gf-h b{font-size:14px}'+
+    '.gf-h button{width:32px;height:32px;border:1px solid transparent;background:var(--pn-2);color:var(--mut);font-size:15px;line-height:1;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}.gf-h button:hover{background:var(--bads);color:var(--bad)}'+
+    '.gf-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 16px 8px;border-bottom:1px solid var(--bd)}.gf-tabs button{border:1px solid transparent;background:transparent;color:var(--mut);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;font-weight:600;transition:background .15s,color .15s}.gf-tabs button:hover{background:var(--pn-2);color:var(--tx)}'+
+    '.gf-tabs button.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac-ring)}.gf-s{display:block;font-size:12px;color:var(--mut);padding:10px 16px 0}'+
+    '#gfCuerpo{padding:12px 16px 16px}#gfCuerpo>p{margin:8px 0}'+
+    '.gf-fig{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px}.gf-fig svg{width:min(240px,60vw);height:auto;flex:none}'+
+    '.gf-ley{list-style:none;margin:0;padding:0;flex:1;min-width:180px;font-size:12.5px}'+
+    '.gf-ley li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)}.gf-ley li:last-child{border-bottom:0}.gf-ley i{width:12px;height:12px;border-radius:4px;flex:none}'+
+    '.gf-ley span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gf-ley b{font-variant-numeric:tabular-nums;font-weight:600}.gf-ley small{color:var(--mut);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}'+
+    '@media(max-width:520px){.gf-fig{justify-content:center}.gf-ley{width:100%}}@media print{#dlgGraf,#btnGraf{display:none!important}}';
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>
