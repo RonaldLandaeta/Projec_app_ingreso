@@ -689,9 +689,12 @@ const respaldoAuto=()=>descargar(new Blob([JSON.stringify(st)],{type:'applicatio
 const hayEstado=()=>Object.keys(st).some(k=>k==='probs'?Object.values(st.probs||{}).some(Boolean):k!=='sig'&&st[k]&&typeof st[k]==='object'&&(st[k].ed||st[k].nota||st[k].listo));
 function cargarDatos(nd){
   const sg=nd._sig||'';
-  if(st.sig&&sg&&st.sig!==sg&&hayEstado()){
-    if(!confirm('Este data.json es distinto al de la sesión anterior. Si continúas se borrarán los horarios editados, las notas, los «listo» y los checks guardados (antes se descargará un respaldo automático). ¿Continuar?'))return aviso('Carga cancelada: se conservó el estado anterior.');
-    respaldoAuto();st={};
+  if(st.sig&&sg&&st.sig!==sg){
+    if(hayEstado()){
+      if(!confirm('Este data.json es distinto al de la sesión anterior. Si continúas se borrarán los horarios editados, las notas, los «listo» y los checks guardados (antes se descargará un respaldo automático). ¿Continuar?'))return aviso('Carga cancelada: se conservó el estado anterior.');
+      respaldoAuto();
+    }
+    st={};                       // nunca reutilizar alumnos cacheados de otro data.json
   }
   limpiarUndo();datos=nd;aplicar();
 }
@@ -759,7 +762,8 @@ async function parsearInsc(nombre,dato){
 /* una materia inscrita -> sección de la oferta cargada; sin adivinar: si hay varias secciones con distinto horario es ambigua */
 function resolverUna(e){
   const nk=normCode,cod=e.cod&&nk(e.cod),nro=e.nro&&nk(e.nro),nom=e.nom&&nz(e.nom),tok=e.tok&&nk(e.tok),tokN=e.tok&&nz(e.tok),crn=e.crn&&nk(e.crn);
-  if(crn){const x=materias.filter(m=>nk(m.nrc)===crn&&(!(cod||nom)||(cod&&nk(m.cod)===cod)||(nom&&nz(m.nombre)===nom)));if(x.length===1)return{m:x[0]}}   // sección exacta
+  let crnNoExiste=false;
+  if(crn){const x=materias.filter(m=>nk(m.nrc)===crn&&(!(cod||nom)||(cod&&nk(m.cod)===cod)||(nom&&nz(m.nombre)===nom)));if(x.length===1)return{m:x[0]};crnNoExiste=!x.length}   // sección exacta
   const porCod=k=>materias.filter(m=>nk(m.cod)===k||nk(m.nrc)===k);
   let c=[];
   if(cod)c=porCod(cod);
@@ -771,31 +775,40 @@ function resolverUna(e){
   if(c.length>1&&cod)afinar(m=>nk(m.cod)===cod);
   if(c.length>1&&nom)afinar(m=>nz(m.nombre)===nom);
   if(!c.length)return{falta:true};
+  if(crnNoExiste)return{m:c[0],fallback:{crn:String(e.crn||'').trim(),materia:c[0].nombre,cod:String(c[0].cod||''),nrc:String(c[0].nrc||'')}};   // el CRN del archivo no está en la oferta: usar la primera sección del código
   if(c.length>1&&new Set(c.map(m=>nz(m.horario))).size>1)return{amb:true};
   return{m:c[0]}}
 function resolverInsc(es){
-  const ok=[],fuera=[],amb=[],visto=new Set();
+  const ok=[],fuera=[],amb=[],fb=[],visto=new Set(),vistoFb=new Set();
   for(const e of es){
     const lab=e.cod||e.nro||e.nom||e.tok,x=resolverUna(e);
-    if(x.m){if(!visto.has(x.m.nrc)){visto.add(x.m.nrc);ok.push(x.m.nrc)}}
+    if(x.m){
+      if(!visto.has(x.m.nrc)){visto.add(x.m.nrc);ok.push(x.m.nrc)}
+      if(x.fallback){const k=normCode(x.fallback.crn)+'|'+normCode(x.m.nrc);if(!vistoFb.has(k)){vistoFb.add(k);fb.push(x.fallback)}}
+    }
     else if(x.amb){if(!amb.includes(lab))amb.push(lab)}
     else if(!fuera.includes(lab))fuera.push(lab)}
-  return{ok,fuera,amb}}
+  return{ok,fuera,amb,fb}}
 function resumenInsc(){
   if(!insc)return;
   if(!datos){aviso('Archivo «'+insc.nombre+'» leído: '+insc.porCi.size+' cédula(s). Carga el data.json de reportes para vincularlas.');return}
   const s=inscStats,extra=[...insc.porCi.keys()].filter(k=>!s.keys.has(k)).length;
+  const fbTotal=alumnos.reduce((n,a)=>n+(((st[a.ci]||{}).fb||[]).length),0);
   let m='Inscripciones: '+s.vinc+' de '+alumnos.length+' alumno(s) vinculados · '+s.mats+' materia(s) en horario';
   if(s.sinIns)m+=' · '+s.sinIns+' sin inscripción en el archivo';
   if(extra)m+=' · '+extra+' cédula(s) del archivo sin reporte (ignoradas)';
   if(s.ed)m+=' · '+s.ed+' con horario editado (se conserva)';
+  if(fbTotal)m+=' · ⚠ '+fbTotal+' CRN sin oferta: se asignó la sección disponible (revisa el detalle del alumno)';
   if(s.noRes)m+=' · ⚠ '+s.noRes+' materia(s) sin resolver (revisa las alertas del alumno)';
   if(!materias.length)m='⚠ No hay oferta de materias cargada: no se puede armar el horario. '+m;
-  aviso(m,!!s.noRes||!materias.length)}
+  aviso(m,!!s.noRes||!!fbTotal||!materias.length)}
+/* Al subir un nuevo Detalle de Inscripción, ninguna cédula debe conservar el horario editado:
+   así aplicar() vuelve a vincular desde el archivo recién cargado. */
+const olvidarEdiciones=()=>{for(const k of Object.keys(st)){if(k==='sig'||k==='probs')continue;const s=st[k];if(s&&typeof s==='object'&&!Array.isArray(s))s.ed=false}};
 $('fIns').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   let d=null;try{d=/\.xlsx$/i.test(f.name)?await f.arrayBuffer():await leerTexto(f)}catch(x){}
-  try{const p=await parsearInsc(f.name,d);insc=Object.assign({nombre:f.name},p);aplicar();resumenInsc()}
+  try{const p=await parsearInsc(f.name,d);insc=Object.assign({nombre:f.name},p);olvidarEdiciones();aplicar();resumenInsc()}
   catch(x){aviso('No se pudo leer «'+f.name+'»: '+x.message,true)}};
 
 
@@ -818,18 +831,18 @@ function aplicar(){
   materias.forEach(m=>{const k=normCode(m.nrc);if(k&&!idx1.has(k))idx1.set(k,m)});
   materias.forEach(m=>{const k=normCode(m.cod);if(k&&!idx1.has(k))idx1.set(k,m);const k2=normCode(m.nro);if(k2&&!idx2.has(k2))idx2.set(k2,m)});
   const vistos=new Set();let sinCi=0,dupCi=0;
-  inscStats={vinc:0,mats:0,sinIns:0,noRes:0,ed:0,keys:new Set()};
+  inscStats={vinc:0,mats:0,sinIns:0,noRes:0,ed:0,fb:0,fbList:[],keys:new Set()};
   alumnos=datos?(datos.estudiantes||[]).map(a=>{
     const ci=String(a.ci==null?'':a.ci).trim();
     if(!ci||ci==='undefined'||ci==='null'){sinCi++;return null}
     if(vistos.has(ci)){dupCi++;return null}vistos.add(ci);
     const pv=st[ci]||{},ins=insc&&insc.porCi.get(ciKey(ci));
-    let r,amb=[];                                                  // todo a NRC canónico; los que no existen en la oferta van aparte
+    let r,amb=[],fb=pv.fb||[];                                      // todo a NRC canónico; los que no existen en la oferta van aparte
     if(pv.ed){r=canonN((pv.n||[]).concat(pv.fuera||[]));amb=pv.amb||[];if(ins)inscStats.ed++}   // el horario editado a mano manda sobre el archivo
-    else if(ins){const x=resolverInsc(ins);r={ok:x.ok,fuera:x.fuera};amb=x.amb;inscStats.vinc++;inscStats.mats+=x.ok.length;inscStats.noRes+=x.fuera.length+x.amb.length}
+    else if(ins){const x=resolverInsc(ins);r={ok:x.ok,fuera:x.fuera};amb=x.amb;fb=x.fb;inscStats.vinc++;inscStats.mats+=x.ok.length;inscStats.noRes+=x.fuera.length+x.amb.length;inscStats.fb+=fb.length;if(fb.length)inscStats.fbList.push(...fb.map(f=>Object.assign({},f,{ci,nombre:a.nombre})))}
     else{r=canonN(a.materias_inscriptas||[]);if(insc)inscStats.sinIns++}
     if(insc)inscStats.keys.add(ciKey(ci));
-    st[ci]={n:r.ok,fuera:r.fuera,amb,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||''};
+    st[ci]={n:r.ok,fuera:r.fuera,amb,ed:!!pv.ed,nota:pv.nota||'',listo:!!pv.listo,prof:pv.prof||'',fb};
     return Object.assign({},a,{ci,nombre:(insc&&insc.nombresCi&&insc.nombresCi.get(ciKey(ci)))||a.nombre});
   }).filter(Boolean):[];
   reportes=datos?(datos.reportes||[]):[];
@@ -1028,10 +1041,11 @@ function renderAlumnos(){
   ? 'Mostrando ' + lista.length + ' de ' + alumnos.length + ' · ' + lista.reduce((n, a) => n + pendientesReal(a), 0) + ' problema(s) pendiente(s)'
   : '';
   $('als').innerHTML = lista.length ? lista.map(a => {
-    const rs = repsDe(a), op = abiertos.has(a.ci), s = st[a.ci]; const al = alertas(a);
+    const rs = repsDe(a), op = abiertos.has(a.ci), s = st[a.ci]; const al = alertas(a), fb = (s && s.fb) || [];
     let det = '';
     if (op) {
-      det = '<div class="rep">' + (al.length ? '<ul>' + al.map(x => '<li class="err">⚠ ' + esc(x) + '</li>').join('') + '</ul>' : '') + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
+      const fbHtml = fb.length ? '<ul style="padding-left:0">' + fb.map(x => '<li style="list-style:none;color:var(--wn);margin-bottom:5px">ℹ El CRN ' + esc(x.crn) + ' de «' + esc(x.materia) + '» no está en la oferta; se asignó la sección ' + esc(x.nrc) + ' (con oferta).</li>').join('') + '</ul>' : '';
+      det = '<div class="rep">' + fbHtml + (al.length ? '<ul>' + al.map(x => '<li class="err">⚠ ' + esc(x) + '</li>').join('') + '</ul>' : '') + (rs.length ? '<ul style="padding-left:0">' + rs.map((r, i) => {
         const key = a.ci + '_' + r.nrc + '_' + i;
         const ok = !!st.probs[key];
         return '<li style="list-style:none;margin-bottom:6px"><label style="cursor:pointer;display:flex;align-items:flex-start;gap:6px">' +
@@ -1051,7 +1065,7 @@ function renderAlumnos(){
 
     return '<div class="al' + (a.ci === sel ? ' sel' : '') + '" data-ci="' + esc(a.ci) + '"><div class="row"><button class="arr" title="Leer reporte">' + (op ? '▾' : '▸') + '</button>' +
       '<div class="who" role="button" tabindex="0" aria-label="Seleccionar alumno"><b>' + (lista.indexOf(a) + 1) + '. ' + esc(a.nombre) + '</b><small>C.I. ' + esc(a.ci) + ' · ' + esc(a.perfil || 'Alumno') + (insc ? (insc.porCi.has(ciKey(a.ci)) ? ' · ' + (s ? s.n.length : 0) + ' inscritas' : ' · sin inscripción') : '') + '</small></div>' +
-      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
+      (s && s.listo ? '<span class="bdg ok">✓ listo</span>' : '') + (al.length ? '<span class="bdg" style="background:var(--bads);color:var(--bad)" title="' + esc(al.join(' | ')) + '">⚠ ' + al.length + '</span>' : '') + ((s && s.fb && s.fb.length) ? '<span class="bdg" style="background:var(--wns);color:var(--wn)" title="' + esc(s.fb.map(x => 'CRN ' + x.crn + ' de ' + x.materia + ' → sección ' + x.nrc).join(' | ')) + '">ℹ ' + s.fb.length + '</span>' : '') + badgeProbs + '</div>' + det + '</div>';
   }).join('') : (alumnos.length ? '<p class="mut">Ningún alumno coincide con el filtro.</p>'
                                 : '<p class="mut">Carga el data.json para ver a los alumnos.</p>');
 }
