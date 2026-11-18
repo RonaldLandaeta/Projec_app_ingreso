@@ -23,8 +23,8 @@
   --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
-/* El tema oscuro automático se omite si el usuario forzó el modo claro */
-@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]){
+/* El tema oscuro es automático (según el sistema) o forzado con el ajuste «Modo oscuro» */
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]):not([data-tema="oscuro"]){
   color-scheme:dark;
   --bg:#0e1219;--pn:#161c26;--pn-2:#1c2431;--tx:#e8edf5;--mut:#9ba7ba;
   --bd:#283141;--bd-strong:#3a465b;
@@ -34,6 +34,16 @@
   --sh-1:0 1px 2px rgba(0,0,0,.35);
   --sh-2:0 12px 28px rgba(0,0,0,.5);
 }}
+:root[data-tema="oscuro"]{
+  color-scheme:dark;
+  --bg:#0e1219;--pn:#161c26;--pn-2:#1c2431;--tx:#e8edf5;--mut:#9ba7ba;
+  --bd:#283141;--bd-strong:#3a465b;
+  --ac:#8fa9ff;--ac-hover:#aabfff;--ac-tx:#0b1220;--acs:#212c4e;--ac-ring:rgba(143,169,255,.32);
+  --bad:#ff9189;--bads:#3b2321;--ok:#5bdcae;--oks:#14332a;--wn:#f0b163;--wns:#382b18;
+  --on-solid:#0a120e;
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 12px 28px rgba(0,0,0,.5);
+}
 
 /* ============================================================
    Base
@@ -210,7 +220,9 @@ header .b.s,.top .b.s{background:var(--pn-2)}
 .leg .up{color:var(--ok);font-weight:700}
 .leg .dn{color:var(--bad);font-weight:700}
 .c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
-@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]) .blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}:root:not([data-tema="claro"]) .blk::after{color:#5c110d}}
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]):not([data-tema="oscuro"]) .blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}:root:not([data-tema="claro"]):not([data-tema="oscuro"]) .blk::after{color:#5c110d}}
+:root[data-tema="oscuro"] .blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}
+:root[data-tema="oscuro"] .blk::after{color:#5c110d}
 
 /* ============================================================
    Panel inferior
@@ -282,9 +294,8 @@ code{background:var(--pn-2);border:1px solid var(--bd);border-radius:5px;padding
 #aviso.show{opacity:1;transform:translate(-50%,0)}
 #aviso.bad{background:var(--bad)}
 #aviso.bad::before{content:"!"}
-@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]) #aviso::before{background:rgba(0,0,0,.14)}}
-
-body.big{font-size:17px;line-height:1.5}
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]):not([data-tema="oscuro"]) #aviso::before{background:rgba(0,0,0,.14)}}
+:root[data-tema="oscuro"] #aviso::before{background:rgba(0,0,0,.14)}
 
 /* ============================================================
    Responsive
@@ -318,8 +329,8 @@ body.big{font-size:17px;line-height:1.5}
 
 </style>
 <script>
-/* Aplica el modo claro antes del primer pintado para evitar el parpadeo del tema oscuro */
-try{const a=JSON.parse(localStorage.getItem('hr_ajustes')||'{}');if(a&&a.claro)document.documentElement.dataset.tema='claro'}catch(e){}
+/* Aplica el tema guardado antes del primer pintado para evitar parpadeos */
+try{const a=JSON.parse(localStorage.getItem('hr_ajustes')||'{}');if(a){if(a.oscuro)document.documentElement.dataset.tema='oscuro';else if(a.claro)document.documentElement.dataset.tema='claro'}}catch(e){}
 </script>
 </head>
 <body>
@@ -382,7 +393,7 @@ try{const a=JSON.parse(localStorage.getItem('hr_ajustes')||'{}');if(a&&a.claro)d
   <label class="load" title="Archivo con solo cédula y materias inscritas (virtual). Se vincula por cédula con los alumnos de los reportes.">Detalles de inscripción<input type="file" id="fIns" accept=".xlsx,.csv,.json,.txt"></label>
   <button class="b s" id="btnResetSt" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
-  <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Mostrar botones Deshacer y Rehacer</label><label><input type="checkbox" id="aBig"> Texto grande</label><label><input type="checkbox" id="aClaro"> Modo claro</label></details>
+  <details class="acc"><summary>👤​ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Mostrar botones Deshacer y Rehacer</label><label><input type="checkbox" id="aOscuro"> Modo oscuro</label><label><input type="checkbox" id="aClaro"> Modo claro</label></details>
   <button class="b s" id="btnUndo" hidden>↶ Deshacer</button>
   <button class="b s" id="btnRedo" hidden>↷ Rehacer</button>
   <button class="b s" id="btnResp">Respaldo ⬇</button>
@@ -1326,11 +1337,17 @@ function aplicarAj(){
   const ver=!!ajustes.undo;
   $('btnUndo').hidden=!ver;
   $('btnRedo').hidden=!ver;
-  document.body.classList.toggle('big',!!ajustes.big);
-  if(ajustes.claro)document.documentElement.dataset.tema='claro';
+  if(ajustes.oscuro)document.documentElement.dataset.tema='oscuro';
+  else if(ajustes.claro)document.documentElement.dataset.tema='claro';
   else delete document.documentElement.dataset.tema;
 }
-[['aConf','conf'],['aUndo','undo'],['aBig','big'],['aClaro','claro']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
+[['aConf','conf'],['aUndo','undo'],['aOscuro','oscuro'],['aClaro','claro']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{
+  ajustes[k]=el.checked;
+  if(k==='oscuro'&&el.checked){ajustes.claro=false;$('aClaro').checked=false}
+  if(k==='claro'&&el.checked){ajustes.oscuro=false;$('aOscuro').checked=false}
+  try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}
+  aplicarAj()
+}});
 aplicarAj();
 $('btnUndo').onclick=deshacer;
 $('btnRedo').onclick=rehacer;
