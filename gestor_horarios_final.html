@@ -23,7 +23,8 @@
   --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
-@media(prefers-color-scheme:dark){:root{
+/* El tema oscuro automático se omite si el usuario forzó el modo claro */
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]){
   color-scheme:dark;
   --bg:#0e1219;--pn:#161c26;--pn-2:#1c2431;--tx:#e8edf5;--mut:#9ba7ba;
   --bd:#283141;--bd-strong:#3a465b;
@@ -209,7 +210,7 @@ header .b.s,.top .b.s{background:var(--pn-2)}
 .leg .up{color:var(--ok);font-weight:700}
 .leg .dn{color:var(--bad);font-weight:700}
 .c0{--h:215}.c1{--h:150}.c2{--h:30}.c3{--h:280}.c4{--h:350}.c5{--h:180}
-@media(prefers-color-scheme:dark){.blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}.blk::after{color:#5c110d}}
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]) .blk{color:#0c131c;background:hsl(var(--h) 42% 76%);border-left-color:hsl(var(--h) 55% 42%)}:root:not([data-tema="claro"]) .blk::after{color:#5c110d}}
 
 /* ============================================================
    Panel inferior
@@ -281,7 +282,7 @@ code{background:var(--pn-2);border:1px solid var(--bd);border-radius:5px;padding
 #aviso.show{opacity:1;transform:translate(-50%,0)}
 #aviso.bad{background:var(--bad)}
 #aviso.bad::before{content:"!"}
-@media(prefers-color-scheme:dark){#aviso::before{background:rgba(0,0,0,.14)}}
+@media(prefers-color-scheme:dark){:root:not([data-tema="claro"]) #aviso::before{background:rgba(0,0,0,.14)}}
 
 body.big{font-size:17px;line-height:1.5}
 
@@ -316,6 +317,10 @@ body.big{font-size:17px;line-height:1.5}
 }
 
 </style>
+<script>
+/* Aplica el modo claro antes del primer pintado para evitar el parpadeo del tema oscuro */
+try{const a=JSON.parse(localStorage.getItem('hr_ajustes')||'{}');if(a&&a.claro)document.documentElement.dataset.tema='claro'}catch(e){}
+</script>
 </head>
 <body>
 <nav class="top">
@@ -377,7 +382,7 @@ body.big{font-size:17px;line-height:1.5}
   <label class="load" title="Archivo con solo cédula y materias inscritas (virtual). Se vincula por cédula con los alumnos de los reportes.">Detalles de inscripción<input type="file" id="fIns" accept=".xlsx,.csv,.json,.txt"></label>
   <button class="b s" id="btnResetSt" title="Limpia el almacenamiento local si los datos antiguos no muestran horarios">Restablecer caché (localStorage)</button>
   <span id="estado" class="mut">Sin datos cargados</span>
-  <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Mostrar botones Deshacer y Rehacer</label><label><input type="checkbox" id="aBig"> Texto grande</label></details>
+  <details class="acc"><summary>♿ Accesibilidad</summary><label><input type="checkbox" id="aConf"> Confirmar antes de quitar una materia</label><label><input type="checkbox" id="aUndo"> Mostrar botones Deshacer y Rehacer</label><label><input type="checkbox" id="aBig"> Texto grande</label><label><input type="checkbox" id="aClaro"> Modo claro</label></details>
   <button class="b s" id="btnUndo" hidden>↶ Deshacer</button>
   <button class="b s" id="btnRedo" hidden>↷ Rehacer</button>
   <button class="b s" id="btnResp">Respaldo ⬇</button>
@@ -1322,8 +1327,10 @@ function aplicarAj(){
   $('btnUndo').hidden=!ver;
   $('btnRedo').hidden=!ver;
   document.body.classList.toggle('big',!!ajustes.big);
+  if(ajustes.claro)document.documentElement.dataset.tema='claro';
+  else delete document.documentElement.dataset.tema;
 }
-[['aConf','conf'],['aUndo','undo'],['aBig','big']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
+[['aConf','conf'],['aUndo','undo'],['aBig','big'],['aClaro','claro']].forEach(([i,k])=>{const el=$(i);el.checked=!!ajustes[k];el.onchange=()=>{ajustes[k]=el.checked;try{localStorage.setItem('hr_ajustes',JSON.stringify(ajustes))}catch(e){}aplicarAj()}});
 aplicarAj();
 $('btnUndo').onclick=deshacer;
 $('btnRedo').onclick=rehacer;
